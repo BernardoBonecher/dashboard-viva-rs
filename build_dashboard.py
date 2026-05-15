@@ -69,9 +69,11 @@ def fetch_granular_data(client: BetaAnalyticsDataClient) -> pd.DataFrame:
             ],
             metrics=[
                 Metric(name="sessions"),
-                Metric(name="activeUsers"),
+                Metric(name="totalUsers"),
                 Metric(name="screenPageViews"),
                 Metric(name="userEngagementDuration"),
+                Metric(name="averageSessionDuration"),
+                Metric(name="engagementRate"),
                 Metric(name="eventCount"),
             ],
             date_ranges=[DateRange(start_date=START_DATE, end_date=END_DATE)],
@@ -92,7 +94,9 @@ def fetch_granular_data(client: BetaAnalyticsDataClient) -> pd.DataFrame:
                     "usuarios": int(row.metric_values[1].value),
                     "pageviews": int(row.metric_values[2].value),
                     "tempo_engajamento": float(row.metric_values[3].value),
-                    "eventos": int(row.metric_values[4].value),
+                    "duracao_sessao": float(row.metric_values[4].value),
+                    "taxa_engajamento": float(row.metric_values[5].value),
+                    "eventos": int(row.metric_values[6].value),
                 }
             )
 
@@ -143,6 +147,8 @@ def build_compact_payload(df: pd.DataFrame) -> dict:
             r.usuarios,
             r.pageviews,
             round(r.tempo_engajamento, 1),
+            round(r.duracao_sessao, 1),
+            round(r.taxa_engajamento, 4),
             r.eventos,
         ]
         for r in df.itertuples(index=False)

@@ -157,23 +157,23 @@
         <p class="text-xs uppercase text-slate-500 font-semibold">Sessões</p>
         <p class="text-2xl font-bold text-slate-800 mt-1" id="kpiSessions">0</p>
       </div>
-      <div class="bg-white rounded-xl shadow-sm p-5">
-        <p class="text-xs uppercase text-slate-500 font-semibold">Usuários únicos</p>
+      <div class="bg-white rounded-xl shadow-sm p-5" title="Total de usuários (GA4 totalUsers): inclui qualquer toque no site, mesmo bounce.">
+        <p class="text-xs uppercase text-slate-500 font-semibold">Total de usuários</p>
         <p class="text-2xl font-bold text-slate-800 mt-1" id="kpiUsers">0</p>
       </div>
-      <div class="bg-white rounded-xl shadow-sm p-5" title="Interesse de compra (GA4): page_view + screen_view events. Repetições contam.">
-        <p class="text-xs uppercase text-slate-500 font-semibold">Interesse de compra</p>
+      <div class="bg-white rounded-xl shadow-sm p-5" title="Visualizações (GA4 screenPageViews): page_view + screen_view events. Repetições contam.">
+        <p class="text-xs uppercase text-slate-500 font-semibold">Visualizações</p>
         <p class="text-2xl font-bold text-slate-800 mt-1" id="kpiPageviews">0</p>
         <p class="text-[10px] text-slate-400 mt-1">pageviews + screen views</p>
       </div>
-      <div class="bg-white rounded-xl shadow-sm p-5">
-        <p class="text-xs uppercase text-slate-500 font-semibold">Tempo médio / sessão</p>
+      <div class="bg-white rounded-xl shadow-sm p-5" title="Duração média da sessão (GA4 averageSessionDuration), ponderada pelas sessões dos dados filtrados.">
+        <p class="text-xs uppercase text-slate-500 font-semibold">Duração média / sessão</p>
         <p class="text-2xl font-bold text-slate-800 mt-1" id="kpiAvgTime">0s</p>
       </div>
-      <div class="bg-white rounded-xl shadow-sm p-5" title="Profundidade da navegação: páginas visitadas por sessão.">
-        <p class="text-xs uppercase text-slate-500 font-semibold">Páginas / sessão</p>
-        <p class="text-2xl font-bold text-slate-800 mt-1" id="kpiPagesPerSession">0</p>
-        <p class="text-[10px] text-slate-400 mt-1">profundidade da navegação</p>
+      <div class="bg-white rounded-xl shadow-sm p-5" title="Taxa de engajamento (GA4 engagementRate): sessões engajadas / total de sessões.">
+        <p class="text-xs uppercase text-slate-500 font-semibold">Taxa de engajamento</p>
+        <p class="text-2xl font-bold text-slate-800 mt-1" id="kpiEngagement">0%</p>
+        <p class="text-[10px] text-slate-400 mt-1">sessões engajadas / total</p>
       </div>
     </section>
 
@@ -295,7 +295,9 @@
       usuarios: r[5],
       pageviews: r[6],
       tempo_engajamento: r[7],
-      eventos: r[8],
+      duracao_sessao: r[8],
+      taxa_engajamento: r[9],
+      eventos: r[10],
       tipo: classifyPageType(pagina, titulo),
     };
   });
@@ -339,12 +341,15 @@
     const map = new Map();
     for (const r of rows) {
       const k = keyFn(r);
-      if (!map.has(k)) map.set(k, { key: k, sessoes: 0, usuarios: 0, pageviews: 0, tempo: 0, eventos: 0 });
+      if (!map.has(k)) map.set(k, { key: k, sessoes: 0, usuarios: 0, pageviews: 0, tempo: 0, duracao_pond: 0, engaj_pond: 0, eventos: 0 });
       const a = map.get(k);
       a.sessoes += r.sessoes;
       a.usuarios += r.usuarios;
       a.pageviews += r.pageviews;
       a.tempo += r.tempo_engajamento;
+      // Ponderação: para tirar média correta depois, multiplica pelo nº de sessões da linha.
+      a.duracao_pond += r.duracao_sessao * r.sessoes;
+      a.engaj_pond += r.taxa_engajamento * r.sessoes;
       a.eventos += r.eventos;
     }
     return Array.from(map.values());
@@ -655,14 +660,16 @@
       acc.usuarios += r.usuarios;
       acc.pageviews += r.pageviews;
       acc.tempo += r.tempo_engajamento;
+      acc.duracao_pond += r.duracao_sessao * r.sessoes;
+      acc.engaj_pond += r.taxa_engajamento * r.sessoes;
       return acc;
-    }, { sessoes: 0, usuarios: 0, pageviews: 0, tempo: 0 });
+    }, { sessoes: 0, usuarios: 0, pageviews: 0, tempo: 0, duracao_pond: 0, engaj_pond: 0 });
 
     document.getElementById("kpiSessions").textContent = fmt.format(totals.sessoes);
     document.getElementById("kpiUsers").textContent = fmt.format(totals.usuarios);
     document.getElementById("kpiPageviews").textContent = fmt.format(totals.pageviews);
-    document.getElementById("kpiAvgTime").textContent = totals.sessoes ? fmtDuration(totals.tempo / totals.sessoes) : "0s";
-    document.getElementById("kpiPagesPerSession").textContent = totals.sessoes ? fmtDecimal(totals.pageviews / totals.sessoes) : "0";
+    document.getElementById("kpiAvgTime").textContent = totals.sessoes ? fmtDuration(totals.duracao_pond / totals.sessoes) : "0s";
+    document.getElementById("kpiEngagement").textContent = totals.sessoes ? (totals.engaj_pond / totals.sessoes * 100).toFixed(1) + "%" : "0%";
 
     // Gráfico por dia
     const daily = aggregate(filtered, r => r.data).sort((a, b) => a.key.localeCompare(b.key));
