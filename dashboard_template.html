@@ -152,14 +152,11 @@
     </section>
 
     <!-- KPIs -->
-    <section class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-      <div class="bg-white rounded-xl shadow-sm p-5">
-        <p class="text-xs uppercase text-slate-500 font-semibold">Sessões</p>
-        <p class="text-2xl font-bold text-slate-800 mt-1" id="kpiSessions">0</p>
-      </div>
-      <div class="bg-white rounded-xl shadow-sm p-5" title="Total de usuários (GA4 totalUsers): inclui qualquer toque no site, mesmo bounce.">
-        <p class="text-xs uppercase text-slate-500 font-semibold">Total de usuários</p>
+    <section class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+      <div class="bg-white rounded-xl shadow-sm p-5" title="Total de usuários únicos (GA4 totalUsers), calculado a partir da query sem pagePath — não infla por número de páginas visitadas. Não afetado por filtros de Tipo/Página.">
+        <p class="text-xs uppercase text-slate-500 font-semibold">Total de usuários únicos</p>
         <p class="text-2xl font-bold text-slate-800 mt-1" id="kpiUsers">0</p>
+        <p class="text-[10px] text-slate-400 mt-1">não afetado por filtro de página</p>
       </div>
       <div class="bg-white rounded-xl shadow-sm p-5" title="Visualizações (GA4 screenPageViews): page_view + screen_view events. Repetições contam.">
         <p class="text-xs uppercase text-slate-500 font-semibold">Visualizações</p>
@@ -285,8 +282,13 @@
   }
   // ============================================================
 
-  // Payload compacto: descompacta usando índices em paginas/cidades/origens.
-  const COMPACT = JSON.parse(document.getElementById("raw-data").textContent);
+  // Payload tem 2 datasets:
+  //  granular  → data×pagina×cidade×origem (pageviews/eventos/tempo somáveis)
+  //  totals    → data×cidade×origem sem pagePath (sessions/users/duração/engaj corretos)
+  const PAYLOAD = JSON.parse(document.getElementById("raw-data").textContent);
+  const COMPACT = PAYLOAD.granular;
+  const TOTALS_COMPACT = PAYLOAD.totals;
+
   const RAW = COMPACT.rows.map(r => {
     const pagina = COMPACT.paginas[r[1]];
     const titulo = COMPACT.titulos[r[1]] || "";
@@ -296,16 +298,23 @@
       titulo,
       cidade: COMPACT.cidades[r[2]],
       origem: COMPACT.origens[r[3]],
-      sessoes: r[4],
-      usuarios: r[5],
-      pageviews: r[6],
-      tempo_engajamento: r[7],
-      duracao_sessao: r[8],
-      taxa_engajamento: r[9],
-      eventos: r[10],
+      sessoes: r[4],        // inflado por pagePath — só usar em rankings relativos
+      pageviews: r[5],
+      tempo_engajamento: r[6],
+      eventos: r[7],
       tipo: classifyPageType(pagina, titulo),
     };
   });
+
+  const TOTALS = TOTALS_COMPACT.rows.map(r => ({
+    data: r[0],
+    cidade: TOTALS_COMPACT.cidades[r[1]],
+    origem: TOTALS_COMPACT.origens[r[2]],
+    sessoes: r[3],          // sem inflar (sem pagePath na dimensão)
+    usuarios: r[4],
+    duracao_sessao: r[5],
+    taxa_engajamento: r[6],
+  }));
 
   // Modelo "exclude": tudo começa selecionado. Desmarcar coloca o valor no Set de excluídos.
   const state = {
@@ -342,20 +351,42 @@
     return true;
   }
 
+  function passesFiltersTotals(r) {
+    // TOTALS não tem dimensão de página — só filtra por data/cidade/origem.
+    const f = state.filters;
+    if (f.startDate && r.data < f.startDate) return false;
+    if (f.endDate && r.data > f.endDate) return false;
+    if (f.excludedCities.has(r.cidade)) return false;
+    if (f.excludedOrigins.has(r.origem)) return false;
+    return true;
+  }
+
   function aggregate(rows, keyFn) {
+    // Agrega RAW (granular). Sessões aqui estão inflados — só usar pra rankings relativos.
     const map = new Map();
     for (const r of rows) {
       const k = keyFn(r);
-      if (!map.has(k)) map.set(k, { key: k, sessoes: 0, usuarios: 0, pageviews: 0, tempo: 0, duracao_pond: 0, engaj_pond: 0, eventos: 0 });
+      if (!map.has(k)) map.set(k, { key: k, sessoes: 0, pageviews: 0, tempo: 0, eventos: 0 });
+      const a = map.get(k);
+      a.sessoes += r.sessoes;
+      a.pageviews += r.pageviews;
+      a.tempo += r.tempo_engajamento;
+      a.eventos += r.eventos;
+    }
+    return Array.from(map.values());
+  }
+
+  function aggregateTotals(rows, keyFn) {
+    // Agrega TOTALS (sem pagePath). Sessions/users SEM inflar.
+    const map = new Map();
+    for (const r of rows) {
+      const k = keyFn(r);
+      if (!map.has(k)) map.set(k, { key: k, sessoes: 0, usuarios: 0, duracao_pond: 0, engaj_pond: 0 });
       const a = map.get(k);
       a.sessoes += r.sessoes;
       a.usuarios += r.usuarios;
-      a.pageviews += r.pageviews;
-      a.tempo += r.tempo_engajamento;
-      // Ponderação: para tirar média correta depois, multiplica pelo nº de sessões da linha.
       a.duracao_pond += r.duracao_sessao * r.sessoes;
       a.engaj_pond += r.taxa_engajamento * r.sessoes;
-      a.eventos += r.eventos;
     }
     return Array.from(map.values());
   }
@@ -364,11 +395,10 @@
     const map = new Map();
     for (const r of rows) {
       const k = r.pagina;
-      if (!map.has(k)) map.set(k, { pagina: k, titulo: r.titulo, tipo: r.tipo, sessoes: 0, usuarios: 0, pageviews: 0, tempo: 0, eventos: 0 });
+      if (!map.has(k)) map.set(k, { pagina: k, titulo: r.titulo, tipo: r.tipo, sessoes: 0, pageviews: 0, tempo: 0, eventos: 0 });
       const a = map.get(k);
       if (!a.titulo && r.titulo) a.titulo = r.titulo;
       a.sessoes += r.sessoes;
-      a.usuarios += r.usuarios;
       a.pageviews += r.pageviews;
       a.tempo += r.tempo_engajamento;
       a.eventos += r.eventos;
@@ -659,46 +689,53 @@
   function render() {
     const filtered = RAW.filter(passesFilters);
 
-    // KPIs
-    const totals = filtered.reduce((acc, r) => {
-      acc.sessoes += r.sessoes;
-      acc.usuarios += r.usuarios;
+    // KPIs da granular: Visualizações e Interesse de compra (afetados por todos os filtros)
+    const granKpi = filtered.reduce((acc, r) => {
       acc.pageviews += r.pageviews;
-      acc.tempo += r.tempo_engajamento;
-      acc.duracao_pond += r.duracao_sessao * r.sessoes;
-      acc.engaj_pond += r.taxa_engajamento * r.sessoes;
       // Interesse de compra = pageviews em páginas cujo URL contém "redirect"
       // (mesmo filtro que o Looker usa em "Redirects para parceiros").
       if (r.pagina.toLowerCase().includes("redirect")) acc.interesse += r.pageviews;
       return acc;
-    }, { sessoes: 0, usuarios: 0, pageviews: 0, tempo: 0, duracao_pond: 0, engaj_pond: 0, interesse: 0 });
+    }, { pageviews: 0, interesse: 0 });
 
-    document.getElementById("kpiSessions").textContent = fmt.format(totals.sessoes);
-    document.getElementById("kpiUsers").textContent = fmt.format(totals.usuarios);
-    document.getElementById("kpiPageviews").textContent = fmt.format(totals.pageviews);
-    document.getElementById("kpiInteresseCompra").textContent = fmt.format(totals.interesse);
-    document.getElementById("kpiAvgTime").textContent = totals.sessoes ? fmtDuration(totals.duracao_pond / totals.sessoes) : "0s";
-    document.getElementById("kpiEngagement").textContent = totals.sessoes ? (totals.engaj_pond / totals.sessoes * 100).toFixed(1) + "%" : "0%";
+    // KPIs da TOTALS: usuários, duração, engajamento (só afetados por data/cidade/origem)
+    const totFiltered = TOTALS.filter(passesFiltersTotals);
+    const totKpi = totFiltered.reduce((acc, r) => {
+      acc.sessoes += r.sessoes;
+      acc.usuarios += r.usuarios;
+      acc.duracao_pond += r.duracao_sessao * r.sessoes;
+      acc.engaj_pond += r.taxa_engajamento * r.sessoes;
+      return acc;
+    }, { sessoes: 0, usuarios: 0, duracao_pond: 0, engaj_pond: 0 });
 
-    // Gráfico por dia
+    document.getElementById("kpiUsers").textContent = fmt.format(totKpi.usuarios);
+    document.getElementById("kpiPageviews").textContent = fmt.format(granKpi.pageviews);
+    document.getElementById("kpiInteresseCompra").textContent = fmt.format(granKpi.interesse);
+    document.getElementById("kpiAvgTime").textContent = totKpi.sessoes ? fmtDuration(totKpi.duracao_pond / totKpi.sessoes) : "0s";
+    document.getElementById("kpiEngagement").textContent = totKpi.sessoes ? (totKpi.engaj_pond / totKpi.sessoes * 100).toFixed(1) + "%" : "0%";
+
+    // Gráfico por dia: pageviews da granular, sessões da TOTALS (corretas)
     const daily = aggregate(filtered, r => r.data).sort((a, b) => a.key.localeCompare(b.key));
+    const dailyTot = aggregateTotals(totFiltered, r => r.data);
+    const sessoesPorDia = new Map(dailyTot.map(d => [d.key, d.sessoes]));
     Plotly.react("chartDaily", [
-      { x: daily.map(d => d.key), y: daily.map(d => d.pageviews), type: "scatter", mode: "lines+markers", name: "Pageviews", line: { color: "#047857", width: 3 }, marker: { size: 6 } },
-      { x: daily.map(d => d.key), y: daily.map(d => d.sessoes), type: "scatter", mode: "lines+markers", name: "Sessões", line: { color: "#f59e0b", width: 2, dash: "dot" } },
+      { x: daily.map(d => d.key), y: daily.map(d => d.pageviews), type: "scatter", mode: "lines+markers", name: "Visualizações", line: { color: "#047857", width: 3 }, marker: { size: 6 } },
+      { x: daily.map(d => d.key), y: daily.map(d => sessoesPorDia.get(d.key) || 0), type: "scatter", mode: "lines+markers", name: "Sessões", line: { color: "#f59e0b", width: 2, dash: "dot" } },
     ], { margin: { t: 10, r: 20, b: 40, l: 50 }, hovermode: "x unified", legend: { orientation: "h", y: -0.2 } }, { displayModeBar: false, responsive: true });
 
-    // Pizza cidades (top 10)
-    const cityAgg = aggregate(filtered, r => r.cidade).sort((a, b) => b.sessoes - a.sessoes);
-    const top10 = cityAgg.slice(0, 10);
-    const rest = cityAgg.slice(10).reduce((s, c) => s + c.sessoes, 0);
+    // Pizza cidades (top 10) — sessões corretas via TOTALS
+    const cityTotAgg = aggregateTotals(totFiltered, r => r.cidade).sort((a, b) => b.sessoes - a.sessoes);
+    const cityRawAgg = aggregate(filtered, r => r.cidade);
+    const top10 = cityTotAgg.slice(0, 10);
+    const rest = cityTotAgg.slice(10).reduce((s, c) => s + c.sessoes, 0);
     const cityLabels = top10.map(c => c.key);
     const cityValues = top10.map(c => c.sessoes);
     if (rest > 0) { cityLabels.push("Outras"); cityValues.push(rest); }
     Plotly.react("chartCity", [{ labels: cityLabels, values: cityValues, type: "pie", hole: 0.45, textinfo: "label+percent", textposition: "outside" }],
       { margin: { t: 10, r: 10, b: 10, l: 10 }, showlegend: false }, { displayModeBar: false, responsive: true });
 
-    // Pizza origens
-    const originAgg = aggregate(filtered, r => r.origem).sort((a, b) => b.sessoes - a.sessoes);
+    // Pizza origens — sessões corretas via TOTALS
+    const originAgg = aggregateTotals(totFiltered, r => r.origem).sort((a, b) => b.sessoes - a.sessoes);
     const oTop = originAgg.slice(0, 8);
     const oRest = originAgg.slice(8).reduce((s, c) => s + c.sessoes, 0);
     const oLabels = oTop.map(c => c.key);
@@ -744,16 +781,17 @@
       </tr>
     `).join("") || `<tr><td colspan="7" class="text-center text-slate-400 py-6">Nenhuma página para os filtros atuais.</td></tr>`;
 
-    // Tabela cidades
+    // Tabela cidades — sessions/users/duração da TOTALS (corretos), pageviews da granular
+    const pageviewsPorCidade = new Map(cityRawAgg.map(c => [c.key, c.pageviews]));
     const cityTbody = document.getElementById("citiesTableBody");
-    cityTbody.innerHTML = cityAgg.slice(0, 20).map((c, i) => `
+    cityTbody.innerHTML = cityTotAgg.slice(0, 20).map((c, i) => `
       <tr>
         <td class="text-slate-400">${i + 1}</td>
         <td class="font-medium">${escapeHtml(c.key)}</td>
         <td class="text-right">${fmt.format(c.sessoes)}</td>
         <td class="text-right">${fmt.format(c.usuarios)}</td>
-        <td class="text-right">${fmt.format(c.pageviews)}</td>
-        <td class="text-right text-slate-600">${c.sessoes ? fmtDuration(c.tempo / c.sessoes) : "0s"}</td>
+        <td class="text-right">${fmt.format(pageviewsPorCidade.get(c.key) || 0)}</td>
+        <td class="text-right text-slate-600">${c.sessoes ? fmtDuration(c.duracao_pond / c.sessoes) : "0s"}</td>
       </tr>
     `).join("") || `<tr><td colspan="6" class="text-center text-slate-400 py-6">Sem dados.</td></tr>`;
   }
