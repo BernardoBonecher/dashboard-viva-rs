@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Viva o RS — Dashboard de Acessos</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+
+    /* chips (usados pelo filtro de status QUENTE/MORNO/FRIO) */
+    .chip {
+      display: inline-flex; align-items: center;
+      padding: 0.25rem 0.75rem; margin: 0.125rem;
+      border-radius: 9999px; font-size: 0.8125rem;
+      cursor: pointer; user-select: none;
+      transition: all 0.15s; border: 1px solid #d1d5db;
+      background: #f9fafb; color: #374151;
+    }
+    .chip:hover { background: #f3f4f6; }
+    .chip.active { background: #047857; color: white; border-color: #047857; }
+
+    /* heat tags */
+    .heat-hot { background: #fee2e2; color: #b91c1c; }
+    .heat-warm { background: #fef3c7; color: #b45309; }
+    .heat-cold { background: #dbeafe; color: #1d4ed8; }
+    .heat-tag {
+      display: inline-block; padding: 0.125rem 0.5rem;
+      border-radius: 9999px; font-size: 0.6875rem; font-weight: 600;
+    }
+
+    /* multi-select dropdown estilo GA4 */
+    .filter-row { display: grid; gap: 0.75rem; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    @media (max-width: 1024px) { .filter-row { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 640px) { .filter-row { grid-template-columns: 1fr; } }
+
+    .multi-filter { position: relative; }
+    .filter-button {
+      width: 100%; display: flex; align-items: center; justify-content: space-between;
+      padding: 0.5rem 0.75rem; background: white;
+      border: 1px solid #d1d5db; border-radius: 0.5rem;
+      text-align: left; cursor: pointer; transition: all 0.15s;
+      min-height: 56px;
+    }
+    .filter-button:hover { border-color: #6b7280; }
+    .filter-button.open { border-color: #047857; box-shadow: 0 0 0 3px rgba(4, 120, 87, 0.15); }
+    .filter-button .label-wrap { display: flex; flex-direction: column; flex: 1; min-width: 0; gap: 2px; }
+    .filter-button .label-text {
+      font-size: 0.6875rem; text-transform: uppercase; color: #6b7280;
+      font-weight: 600; letter-spacing: 0.025em; line-height: 1;
+    }
+    .filter-button .selected-text {
+      color: #1f2937; font-size: 0.875rem; font-weight: 500;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .filter-button .caret { color: #9ca3af; margin-left: 0.5rem; transition: transform 0.15s; flex-shrink: 0; }
+    .filter-button.open .caret { transform: rotate(180deg); color: #047857; }
+
+    .filter-dropdown {
+      position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+      background: white; border: 1px solid #e5e7eb; border-radius: 0.5rem;
+      box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1);
+      z-index: 50; overflow: hidden;
+    }
+    .filter-dropdown.hidden { display: none; }
+    /* página tem o dropdown mais largo porque os títulos são compridos */
+    #filterPage .filter-dropdown { min-width: 420px; }
+
+    .filter-header {
+      display: flex; align-items: center; justify-content: space-between;
+      background: linear-gradient(to right, #1e6dd8, #2563eb);
+      color: white; padding: 0.75rem 0.875rem;
+    }
+    .filter-header label {
+      display: flex; align-items: center; gap: 0.5rem; flex: 1;
+      cursor: pointer; font-weight: 600; font-size: 0.875rem;
+    }
+    .filter-header input[type=checkbox] { width: 1rem; height: 1rem; accent-color: white; cursor: pointer; }
+    .filter-header .right-label { font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.95; }
+
+    .filter-search {
+      width: calc(100% - 1.5rem); margin: 0.625rem 0.75rem 0;
+      padding: 0.5rem 0.75rem 0.5rem 2rem; border: 1px solid #e5e7eb; border-radius: 0.375rem;
+      font-size: 0.8125rem; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' fill='none' stroke='%239ca3af' stroke-width='2' viewBox='0 0 24 24'><circle cx='11' cy='11' r='8'/><path d='m21 21-4.35-4.35'/></svg>");
+      background-repeat: no-repeat; background-position: 0.5rem center;
+    }
+    .filter-search:focus { outline: none; border-color: #047857; box-shadow: 0 0 0 2px rgba(4,120,87,0.1); }
+
+    .filter-options { max-height: 320px; overflow-y: auto; padding: 0.5rem; }
+    .filter-options label {
+      display: flex; align-items: center; gap: 0.5rem;
+      padding: 0.375rem 0.5rem; border-radius: 0.25rem;
+      cursor: pointer; font-size: 0.8125rem;
+    }
+    .filter-options label:hover { background: #f3f4f6; }
+    .filter-options input[type=checkbox] { accent-color: #2563eb; flex-shrink: 0; width: 0.875rem; height: 0.875rem; }
+    .filter-options .opt-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+    .filter-options .opt-primary { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #1f2937; }
+    .filter-options .opt-secondary { font-size: 0.6875rem; color: #9ca3af; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .filter-options .opt-volume { color: #6b7280; font-size: 0.75rem; font-variant-numeric: tabular-nums; flex-shrink: 0; padding-left: 0.5rem; }
+
+    /* tabelas */
+    table { border-collapse: collapse; width: 100%; }
+    th, td { text-align: left; padding: 0.5rem 0.75rem; }
+    th { background: #f9fafb; font-size: 0.75rem; text-transform: uppercase; color: #6b7280; font-weight: 600; }
+    tbody tr { border-top: 1px solid #f3f4f6; }
+    tbody tr:hover { background: #f9fafb; }
+    .truncate-cell { max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+  <header class="bg-gradient-to-r from-emerald-700 to-emerald-600 text-white shadow">
+    <div class="max-w-7xl mx-auto px-6 py-5">
+      <div class="flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <h1 class="text-2xl font-bold">Viva o RS — Dashboard de Acessos</h1>
+          <p class="text-sm text-emerald-100">Período: <span>__START_DATE__ a __END_DATE__</span></p>
+        </div>
+        <p class="text-xs text-emerald-200">Atualizado em __GENERATED_AT__</p>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-6 py-6 space-y-6">
+
+    <!-- FILTROS -->
+    <section class="bg-white rounded-xl shadow-sm p-5">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-lg font-semibold text-slate-700">Filtros</h2>
+        <button id="clearFilters" class="text-sm text-emerald-700 hover:text-emerald-900 font-medium">Limpar tudo</button>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+        <div>
+          <label class="text-xs uppercase font-semibold text-slate-500 block mb-1">Data inicial</label>
+          <input type="date" id="startDate" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none" />
+        </div>
+        <div>
+          <label class="text-xs uppercase font-semibold text-slate-500 block mb-1">Data final</label>
+          <input type="date" id="endDate" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none" />
+        </div>
+      </div>
+
+      <div class="filter-row">
+        <div class="multi-filter" id="filterType"></div>
+        <div class="multi-filter" id="filterPage"></div>
+        <div class="multi-filter" id="filterCity"></div>
+        <div class="multi-filter" id="filterOrigin"></div>
+      </div>
+    </section>
+
+    <!-- KPIs -->
+    <section class="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <div class="bg-white rounded-xl shadow-sm p-5">
+        <p class="text-xs uppercase text-slate-500 font-semibold">Sessões</p>
+        <p class="text-2xl font-bold text-slate-800 mt-1" id="kpiSessions">0</p>
+      </div>
+      <div class="bg-white rounded-xl shadow-sm p-5">
+        <p class="text-xs uppercase text-slate-500 font-semibold">Usuários únicos</p>
+        <p class="text-2xl font-bold text-slate-800 mt-1" id="kpiUsers">0</p>
+      </div>
+      <div class="bg-white rounded-xl shadow-sm p-5" title="Interesse de compra (GA4): page_view + screen_view events. Repetições contam.">
+        <p class="text-xs uppercase text-slate-500 font-semibold">Interesse de compra</p>
+        <p class="text-2xl font-bold text-slate-800 mt-1" id="kpiPageviews">0</p>
+        <p class="text-[10px] text-slate-400 mt-1">pageviews + screen views</p>
+      </div>
+      <div class="bg-white rounded-xl shadow-sm p-5">
+        <p class="text-xs uppercase text-slate-500 font-semibold">Tempo médio / sessão</p>
+        <p class="text-2xl font-bold text-slate-800 mt-1" id="kpiAvgTime">0s</p>
+      </div>
+      <div class="bg-white rounded-xl shadow-sm p-5" title="Profundidade da navegação: páginas visitadas por sessão.">
+        <p class="text-xs uppercase text-slate-500 font-semibold">Páginas / sessão</p>
+        <p class="text-2xl font-bold text-slate-800 mt-1" id="kpiPagesPerSession">0</p>
+        <p class="text-[10px] text-slate-400 mt-1">profundidade da navegação</p>
+      </div>
+    </section>
+
+    <!-- GRÁFICO POR DIA -->
+    <section class="bg-white rounded-xl shadow-sm p-5">
+      <h2 class="text-lg font-semibold text-slate-700 mb-3">Acessos por dia</h2>
+      <div id="chartDaily" style="height: 320px;"></div>
+    </section>
+
+    <!-- PIZZAS -->
+    <section class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div class="bg-white rounded-xl shadow-sm p-5">
+        <h2 class="text-lg font-semibold text-slate-700 mb-3">Acessos por cidade (top 10)</h2>
+        <div id="chartCity" style="height: 360px;"></div>
+      </div>
+      <div class="bg-white rounded-xl shadow-sm p-5">
+        <h2 class="text-lg font-semibold text-slate-700 mb-3">Origem do tráfego</h2>
+        <div id="chartOrigin" style="height: 360px;"></div>
+      </div>
+    </section>
+
+    <!-- FUNIL DE INTERESSE -->
+    <section class="bg-white rounded-xl shadow-sm p-5">
+      <h2 class="text-lg font-semibold text-slate-700 mb-1">Funil de interesse — top páginas</h2>
+      <p class="text-xs text-slate-500 mb-3">Ordenado por pageviews × tempo médio. Mostra onde o público mais se aprofunda.</p>
+      <div id="chartFunnel" style="height: 420px;"></div>
+    </section>
+
+    <!-- TABELA PÁGINAS -->
+    <section class="bg-white rounded-xl shadow-sm p-5">
+      <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <div>
+          <h2 class="text-lg font-semibold text-slate-700">Ranking de páginas</h2>
+          <p class="text-xs text-slate-500">Status: <span class="heat-tag heat-hot">QUENTE</span> alto volume + alto engajamento · <span class="heat-tag heat-warm">MORNO</span> um dos dois · <span class="heat-tag heat-cold">FRIO</span> baixo nos dois</p>
+        </div>
+        <div class="flex gap-2">
+          <button data-heat="all" class="heat-filter chip active">Todas</button>
+          <button data-heat="hot" class="heat-filter chip">Quentes</button>
+          <button data-heat="warm" class="heat-filter chip">Mornas</button>
+          <button data-heat="cold" class="heat-filter chip">Frias</button>
+        </div>
+      </div>
+      <div class="overflow-x-auto">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Página</th>
+              <th>Tipo</th>
+              <th class="text-right">Pageviews</th>
+              <th class="text-right">Sessões</th>
+              <th class="text-right">Tempo médio</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="pagesTableBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- TABELA CIDADES -->
+    <section class="bg-white rounded-xl shadow-sm p-5">
+      <h2 class="text-lg font-semibold text-slate-700 mb-3">Ranking de regiões (top 20)</h2>
+      <div class="overflow-x-auto">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Cidade</th>
+              <th class="text-right">Sessões</th>
+              <th class="text-right">Usuários</th>
+              <th class="text-right">Pageviews</th>
+              <th class="text-right">Tempo médio</th>
+            </tr>
+          </thead>
+          <tbody id="citiesTableBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <footer class="text-center text-xs text-slate-400 py-6">
+      Gerado por <code>build_dashboard.py</code> · dados do GA4 property 448015610
+    </footer>
+
+  </main>
+
+  <script id="raw-data" type="application/json">__DATA_JSON__</script>
+  <script>
+  // ============================================================
+  // CLASSIFICAÇÃO DE TIPO DE PÁGINA — edite aqui pra customizar.
+  // ============================================================
+  function classifyPageType(path, title) {
+    const text = ((path || "") + " " + (title || "")).toLowerCase();
+    if (path === "/" || path === "" || path === "/home") return "Home";
+    if (/promo|oferta|desconto|cupom|black/i.test(text)) return "Promoção";
+    if (/parceiro|estabelecimento|loja/i.test(text)) return "Parceiro";
+    if (/categoria|cat[\/-]/i.test(text)) return "Categoria";
+    if (/produto|item|servic/i.test(text)) return "Produto";
+    if (/evento|agenda|show/i.test(text)) return "Evento";
+    if (/contato|fale|sobre|institucional|quem-somos/i.test(text)) return "Institucional";
+    if (/blog|noticia|post|artigo|materia/i.test(text)) return "Blog";
+    if (/busca|search|pesquisa/i.test(text)) return "Busca";
+    return "Outras";
+  }
+  // ============================================================
+
+  // Payload compacto: descompacta usando índices em paginas/cidades/origens.
+  const COMPACT = JSON.parse(document.getElementById("raw-data").textContent);
+  const RAW = COMPACT.rows.map(r => {
+    const pagina = COMPACT.paginas[r[1]];
+    const titulo = COMPACT.titulos[r[1]] || "";
+    return {
+      data: r[0],
+      pagina,
+      titulo,
+      cidade: COMPACT.cidades[r[2]],
+      origem: COMPACT.origens[r[3]],
+      sessoes: r[4],
+      usuarios: r[5],
+      pageviews: r[6],
+      tempo_engajamento: r[7],
+      eventos: r[8],
+      tipo: classifyPageType(pagina, titulo),
+    };
+  });
+
+  // Modelo "exclude": tudo começa selecionado. Desmarcar coloca o valor no Set de excluídos.
+  const state = {
+    filters: {
+      startDate: "",
+      endDate: "",
+      excludedTypes: new Set(),
+      excludedPages: new Set(),
+      excludedCities: new Set(),
+      excludedOrigins: new Set(),
+    },
+    heatFilter: "all",
+  };
+
+  const fmt = new Intl.NumberFormat("pt-BR");
+  const fmtDecimal = (n) => new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 2 }).format(n);
+  const fmtDuration = (sec) => {
+    if (!sec || isNaN(sec)) return "0s";
+    const s = Math.round(sec);
+    if (s < 60) return s + "s";
+    const m = Math.floor(s / 60);
+    const r = s % 60;
+    return m + "min " + r.toString().padStart(2, "0") + "s";
+  };
+
+  function passesFilters(r) {
+    const f = state.filters;
+    if (f.startDate && r.data < f.startDate) return false;
+    if (f.endDate && r.data > f.endDate) return false;
+    if (f.excludedTypes.has(r.tipo)) return false;
+    if (f.excludedPages.has(r.pagina)) return false;
+    if (f.excludedCities.has(r.cidade)) return false;
+    if (f.excludedOrigins.has(r.origem)) return false;
+    return true;
+  }
+
+  function aggregate(rows, keyFn) {
+    const map = new Map();
+    for (const r of rows) {
+      const k = keyFn(r);
+      if (!map.has(k)) map.set(k, { key: k, sessoes: 0, usuarios: 0, pageviews: 0, tempo: 0, eventos: 0 });
+      const a = map.get(k);
+      a.sessoes += r.sessoes;
+      a.usuarios += r.usuarios;
+      a.pageviews += r.pageviews;
+      a.tempo += r.tempo_engajamento;
+      a.eventos += r.eventos;
+    }
+    return Array.from(map.values());
+  }
+
+  function aggregateByPage(rows) {
+    const map = new Map();
+    for (const r of rows) {
+      const k = r.pagina;
+      if (!map.has(k)) map.set(k, { pagina: k, titulo: r.titulo, tipo: r.tipo, sessoes: 0, usuarios: 0, pageviews: 0, tempo: 0, eventos: 0 });
+      const a = map.get(k);
+      if (!a.titulo && r.titulo) a.titulo = r.titulo;
+      a.sessoes += r.sessoes;
+      a.usuarios += r.usuarios;
+      a.pageviews += r.pageviews;
+      a.tempo += r.tempo_engajamento;
+      a.eventos += r.eventos;
+    }
+    return Array.from(map.values());
+  }
+
+  function classifyHeat(pages) {
+    if (pages.length === 0) return pages;
+    const sortedByPV = [...pages].map(p => p.pageviews).sort((a, b) => a - b);
+    const sortedByTime = [...pages].map(p => p.pageviews > 0 ? p.tempo / p.pageviews : 0).sort((a, b) => a - b);
+    const q = (arr, p) => arr[Math.floor(arr.length * p)] || 0;
+    const pvHigh = q(sortedByPV, 0.75);
+    const pvLow = q(sortedByPV, 0.25);
+    const tHigh = q(sortedByTime, 0.75);
+    const tLow = q(sortedByTime, 0.25);
+    return pages.map(p => {
+      const avgT = p.pageviews > 0 ? p.tempo / p.pageviews : 0;
+      const hotPV = p.pageviews >= pvHigh;
+      const hotT = avgT >= tHigh;
+      const coldPV = p.pageviews <= pvLow;
+      const coldT = avgT <= tLow;
+      let heat = "warm";
+      if (hotPV && hotT) heat = "hot";
+      else if (coldPV && coldT) heat = "cold";
+      return { ...p, avgTime: avgT, heat };
+    });
+  }
+
+  function escapeHtml(s) {
+    return String(s || "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+  }
+
+  // ============================================================
+  // MULTI-SELECT FILTER (estilo GA4)
+  // ============================================================
+  const filterInstances = [];
+
+  function setupMultiFilter(opts) {
+    // opts: { container, labelText, options, excludedSet, headerRightLabel }
+    // options: Array<{ value, primary, secondary?, volume, searchable }>
+    const container = opts.container;
+    const excludedSet = opts.excludedSet;
+
+    const button = document.createElement("button");
+    button.className = "filter-button";
+    button.type = "button";
+    button.innerHTML = `
+      <span class="label-wrap">
+        <span class="label-text">${escapeHtml(opts.labelText)}</span>
+        <span class="selected-text">Todas (${opts.options.length})</span>
+      </span>
+      <span class="caret">▾</span>
+    `;
+    container.appendChild(button);
+
+    const dropdown = document.createElement("div");
+    dropdown.className = "filter-dropdown hidden";
+
+    const header = document.createElement("div");
+    header.className = "filter-header";
+    const headerLabel = document.createElement("label");
+    const selectAll = document.createElement("input");
+    selectAll.type = "checkbox";
+    selectAll.checked = true;
+    const headerSpan = document.createElement("span");
+    headerSpan.textContent = opts.labelText;
+    headerLabel.appendChild(selectAll);
+    headerLabel.appendChild(headerSpan);
+    header.appendChild(headerLabel);
+    const rightSpan = document.createElement("span");
+    rightSpan.className = "right-label";
+    rightSpan.textContent = opts.headerRightLabel || "Sessões";
+    header.appendChild(rightSpan);
+    dropdown.appendChild(header);
+
+    const search = document.createElement("input");
+    search.type = "text";
+    search.placeholder = "Digite para pesquisar";
+    search.className = "filter-search";
+    dropdown.appendChild(search);
+
+    const optionsContainer = document.createElement("div");
+    optionsContainer.className = "filter-options";
+
+    const labelEls = [];
+    opts.options.forEach(opt => {
+      const label = document.createElement("label");
+      label.dataset.searchable = opt.searchable;
+
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.checked = !excludedSet.has(opt.value);
+
+      const textWrap = document.createElement("span");
+      textWrap.className = "opt-text";
+
+      const primary = document.createElement("span");
+      primary.className = "opt-primary";
+      primary.textContent = opt.primary;
+      primary.title = opt.primary;
+      textWrap.appendChild(primary);
+
+      if (opt.secondary) {
+        const secondary = document.createElement("span");
+        secondary.className = "opt-secondary";
+        secondary.textContent = opt.secondary;
+        secondary.title = opt.secondary;
+        textWrap.appendChild(secondary);
+      }
+
+      const vol = document.createElement("span");
+      vol.className = "opt-volume";
+      vol.textContent = fmt.format(opt.volume);
+
+      label.appendChild(cb);
+      label.appendChild(textWrap);
+      label.appendChild(vol);
+      optionsContainer.appendChild(label);
+      labelEls.push({ label, cb, value: opt.value });
+    });
+
+    dropdown.appendChild(optionsContainer);
+    container.appendChild(dropdown);
+
+    const selectedText = button.querySelector(".selected-text");
+
+    function updateButtonText() {
+      const total = opts.options.length;
+      const excluded = excludedSet.size;
+      const selected = total - excluded;
+      if (excluded === 0) selectedText.textContent = `Todas (${total})`;
+      else if (selected === 0) selectedText.textContent = "Nenhuma selecionada";
+      else if (selected === 1) {
+        const onlyValue = opts.options.find(o => !excludedSet.has(o.value));
+        selectedText.textContent = onlyValue ? onlyValue.primary : "1 selecionada";
+      } else selectedText.textContent = `${selected} de ${total} selecionadas`;
+    }
+
+    function updateSelectAllState() {
+      const total = opts.options.length;
+      const excluded = excludedSet.size;
+      if (excluded === 0) { selectAll.checked = true; selectAll.indeterminate = false; }
+      else if (excluded === total) { selectAll.checked = false; selectAll.indeterminate = false; }
+      else { selectAll.checked = false; selectAll.indeterminate = true; }
+    }
+
+    button.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const wasOpen = !dropdown.classList.contains("hidden");
+      closeAllDropdowns();
+      if (!wasOpen) {
+        dropdown.classList.remove("hidden");
+        button.classList.add("open");
+        setTimeout(() => search.focus(), 50);
+      }
+    });
+
+    dropdown.addEventListener("click", e => e.stopPropagation());
+
+    search.addEventListener("input", () => {
+      const q = search.value.toLowerCase().trim();
+      labelEls.forEach(({ label }) => {
+        label.style.display = !q || label.dataset.searchable.includes(q) ? "" : "none";
+      });
+    });
+
+    selectAll.addEventListener("change", () => {
+      if (selectAll.checked) {
+        excludedSet.clear();
+        labelEls.forEach(({ cb }) => cb.checked = true);
+      } else {
+        opts.options.forEach(o => excludedSet.add(o.value));
+        labelEls.forEach(({ cb }) => cb.checked = false);
+      }
+      selectAll.indeterminate = false;
+      updateButtonText();
+      render();
+    });
+
+    labelEls.forEach(({ cb, value }) => {
+      cb.addEventListener("change", () => {
+        if (cb.checked) excludedSet.delete(value);
+        else excludedSet.add(value);
+        updateSelectAllState();
+        updateButtonText();
+        render();
+      });
+    });
+
+    updateButtonText();
+
+    const instance = {
+      reset() {
+        excludedSet.clear();
+        labelEls.forEach(({ cb }) => cb.checked = true);
+        selectAll.checked = true;
+        selectAll.indeterminate = false;
+        search.value = "";
+        labelEls.forEach(({ label }) => label.style.display = "");
+        updateButtonText();
+      }
+    };
+    filterInstances.push(instance);
+    return instance;
+  }
+
+  function closeAllDropdowns() {
+    document.querySelectorAll(".filter-dropdown").forEach(d => d.classList.add("hidden"));
+    document.querySelectorAll(".filter-button.open").forEach(b => b.classList.remove("open"));
+  }
+  document.addEventListener("click", closeAllDropdowns);
+
+  // ============================================================
+  // POPULA FILTROS
+  // ============================================================
+  function populateFilters() {
+    // tipo
+    const typeVolume = new Map();
+    RAW.forEach(r => typeVolume.set(r.tipo, (typeVolume.get(r.tipo) || 0) + r.sessoes));
+    const typeOpts = Array.from(typeVolume.keys())
+      .sort((a, b) => typeVolume.get(b) - typeVolume.get(a))
+      .map(t => ({ value: t, primary: t, volume: typeVolume.get(t), searchable: t.toLowerCase() }));
+    setupMultiFilter({
+      container: document.getElementById("filterType"),
+      labelText: "Tipo de página",
+      options: typeOpts,
+      excludedSet: state.filters.excludedTypes,
+    });
+
+    // página: usa pageviews como volume (mais relevante pra páginas) e título como display
+    const pageVolume = new Map();
+    const pageTitle = new Map();
+    RAW.forEach(r => {
+      pageVolume.set(r.pagina, (pageVolume.get(r.pagina) || 0) + r.pageviews);
+      if (r.titulo && !pageTitle.has(r.pagina)) pageTitle.set(r.pagina, r.titulo);
+    });
+    const pageOpts = Array.from(pageVolume.keys())
+      .sort((a, b) => pageVolume.get(b) - pageVolume.get(a))
+      .map(p => {
+        const titulo = pageTitle.get(p);
+        return {
+          value: p,
+          primary: titulo || p,
+          secondary: titulo ? p : null,
+          volume: pageVolume.get(p),
+          searchable: ((titulo || "") + " " + p).toLowerCase(),
+        };
+      });
+    setupMultiFilter({
+      container: document.getElementById("filterPage"),
+      labelText: "Página",
+      options: pageOpts,
+      excludedSet: state.filters.excludedPages,
+      headerRightLabel: "Pageviews",
+    });
+
+    // cidade
+    const cityVolume = new Map();
+    RAW.forEach(r => cityVolume.set(r.cidade, (cityVolume.get(r.cidade) || 0) + r.sessoes));
+    const cityOpts = Array.from(cityVolume.keys())
+      .sort((a, b) => cityVolume.get(b) - cityVolume.get(a))
+      .map(c => ({ value: c, primary: c, volume: cityVolume.get(c), searchable: c.toLowerCase() }));
+    setupMultiFilter({
+      container: document.getElementById("filterCity"),
+      labelText: "Cidade",
+      options: cityOpts,
+      excludedSet: state.filters.excludedCities,
+    });
+
+    // origem
+    const originVolume = new Map();
+    RAW.forEach(r => originVolume.set(r.origem, (originVolume.get(r.origem) || 0) + r.sessoes));
+    const originOpts = Array.from(originVolume.keys())
+      .sort((a, b) => originVolume.get(b) - originVolume.get(a))
+      .map(o => ({ value: o, primary: o, volume: originVolume.get(o), searchable: o.toLowerCase() }));
+    setupMultiFilter({
+      container: document.getElementById("filterOrigin"),
+      labelText: "Origem do usuário",
+      options: originOpts,
+      excludedSet: state.filters.excludedOrigins,
+    });
+  }
+
+  // ============================================================
+  // RENDER
+  // ============================================================
+  function render() {
+    const filtered = RAW.filter(passesFilters);
+
+    // KPIs
+    const totals = filtered.reduce((acc, r) => {
+      acc.sessoes += r.sessoes;
+      acc.usuarios += r.usuarios;
+      acc.pageviews += r.pageviews;
+      acc.tempo += r.tempo_engajamento;
+      return acc;
+    }, { sessoes: 0, usuarios: 0, pageviews: 0, tempo: 0 });
+
+    document.getElementById("kpiSessions").textContent = fmt.format(totals.sessoes);
+    document.getElementById("kpiUsers").textContent = fmt.format(totals.usuarios);
+    document.getElementById("kpiPageviews").textContent = fmt.format(totals.pageviews);
+    document.getElementById("kpiAvgTime").textContent = totals.sessoes ? fmtDuration(totals.tempo / totals.sessoes) : "0s";
+    document.getElementById("kpiPagesPerSession").textContent = totals.sessoes ? fmtDecimal(totals.pageviews / totals.sessoes) : "0";
+
+    // Gráfico por dia
+    const daily = aggregate(filtered, r => r.data).sort((a, b) => a.key.localeCompare(b.key));
+    Plotly.react("chartDaily", [
+      { x: daily.map(d => d.key), y: daily.map(d => d.pageviews), type: "scatter", mode: "lines+markers", name: "Pageviews", line: { color: "#047857", width: 3 }, marker: { size: 6 } },
+      { x: daily.map(d => d.key), y: daily.map(d => d.sessoes), type: "scatter", mode: "lines+markers", name: "Sessões", line: { color: "#f59e0b", width: 2, dash: "dot" } },
+    ], { margin: { t: 10, r: 20, b: 40, l: 50 }, hovermode: "x unified", legend: { orientation: "h", y: -0.2 } }, { displayModeBar: false, responsive: true });
+
+    // Pizza cidades (top 10)
+    const cityAgg = aggregate(filtered, r => r.cidade).sort((a, b) => b.sessoes - a.sessoes);
+    const top10 = cityAgg.slice(0, 10);
+    const rest = cityAgg.slice(10).reduce((s, c) => s + c.sessoes, 0);
+    const cityLabels = top10.map(c => c.key);
+    const cityValues = top10.map(c => c.sessoes);
+    if (rest > 0) { cityLabels.push("Outras"); cityValues.push(rest); }
+    Plotly.react("chartCity", [{ labels: cityLabels, values: cityValues, type: "pie", hole: 0.45, textinfo: "label+percent", textposition: "outside" }],
+      { margin: { t: 10, r: 10, b: 10, l: 10 }, showlegend: false }, { displayModeBar: false, responsive: true });
+
+    // Pizza origens
+    const originAgg = aggregate(filtered, r => r.origem).sort((a, b) => b.sessoes - a.sessoes);
+    const oTop = originAgg.slice(0, 8);
+    const oRest = originAgg.slice(8).reduce((s, c) => s + c.sessoes, 0);
+    const oLabels = oTop.map(c => c.key);
+    const oValues = oTop.map(c => c.sessoes);
+    if (oRest > 0) { oLabels.push("Outras"); oValues.push(oRest); }
+    Plotly.react("chartOrigin", [{ labels: oLabels, values: oValues, type: "pie", hole: 0.45, textinfo: "label+percent", textposition: "outside" }],
+      { margin: { t: 10, r: 10, b: 10, l: 10 }, showlegend: false }, { displayModeBar: false, responsive: true });
+
+    // Funil
+    const pagesAll = aggregateByPage(filtered);
+    pagesAll.forEach(p => p.avgTime = p.pageviews > 0 ? p.tempo / p.pageviews : 0);
+    const funnel = [...pagesAll]
+      .map(p => ({ ...p, interesse: p.pageviews * p.avgTime }))
+      .sort((a, b) => b.interesse - a.interesse)
+      .slice(0, 12)
+      .reverse();
+    Plotly.react("chartFunnel", [{
+      type: "bar", orientation: "h",
+      x: funnel.map(p => p.pageviews),
+      y: funnel.map(p => (p.titulo || p.pagina).slice(0, 50)),
+      text: funnel.map(p => fmt.format(p.pageviews) + " pv · " + fmtDuration(p.avgTime)),
+      textposition: "auto",
+      marker: { color: funnel.map((_, i) => `rgba(4, 120, 87, ${0.4 + (i / funnel.length) * 0.6})`) },
+    }], { margin: { t: 10, r: 20, b: 40, l: 220 }, xaxis: { title: "Pageviews" } }, { displayModeBar: false, responsive: true });
+
+    // Tabela páginas com heat
+    const pagesWithHeat = classifyHeat(pagesAll).sort((a, b) => b.pageviews - a.pageviews);
+    const heatFiltered = state.heatFilter === "all" ? pagesWithHeat : pagesWithHeat.filter(p => p.heat === state.heatFilter);
+    const heatLabel = { hot: "QUENTE", warm: "MORNO", cold: "FRIO" };
+    const tbody = document.getElementById("pagesTableBody");
+    tbody.innerHTML = heatFiltered.slice(0, 30).map((p, i) => `
+      <tr>
+        <td class="text-slate-400">${i + 1}</td>
+        <td class="truncate-cell" title="${escapeHtml(p.titulo || "")}\n${escapeHtml(p.pagina)}">
+          <div class="font-medium text-slate-800">${escapeHtml(p.titulo || p.pagina)}</div>
+          <div class="text-xs text-slate-500">${escapeHtml(p.pagina)}</div>
+        </td>
+        <td><span class="text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded">${p.tipo}</span></td>
+        <td class="text-right font-medium">${fmt.format(p.pageviews)}</td>
+        <td class="text-right">${fmt.format(p.sessoes)}</td>
+        <td class="text-right text-slate-600">${fmtDuration(p.avgTime)}</td>
+        <td><span class="heat-tag heat-${p.heat}">${heatLabel[p.heat]}</span></td>
+      </tr>
+    `).join("") || `<tr><td colspan="7" class="text-center text-slate-400 py-6">Nenhuma página para os filtros atuais.</td></tr>`;
+
+    // Tabela cidades
+    const cityTbody = document.getElementById("citiesTableBody");
+    cityTbody.innerHTML = cityAgg.slice(0, 20).map((c, i) => `
+      <tr>
+        <td class="text-slate-400">${i + 1}</td>
+        <td class="font-medium">${escapeHtml(c.key)}</td>
+        <td class="text-right">${fmt.format(c.sessoes)}</td>
+        <td class="text-right">${fmt.format(c.usuarios)}</td>
+        <td class="text-right">${fmt.format(c.pageviews)}</td>
+        <td class="text-right text-slate-600">${c.sessoes ? fmtDuration(c.tempo / c.sessoes) : "0s"}</td>
+      </tr>
+    `).join("") || `<tr><td colspan="6" class="text-center text-slate-400 py-6">Sem dados.</td></tr>`;
+  }
+
+  // ============================================================
+  // LISTENERS
+  // ============================================================
+  document.getElementById("startDate").addEventListener("change", e => { state.filters.startDate = e.target.value; render(); });
+  document.getElementById("endDate").addEventListener("change", e => { state.filters.endDate = e.target.value; render(); });
+
+  document.querySelectorAll(".heat-filter").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".heat-filter").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      state.heatFilter = btn.dataset.heat;
+      render();
+    });
+  });
+
+  document.getElementById("clearFilters").addEventListener("click", () => {
+    state.filters.startDate = "";
+    state.filters.endDate = "";
+    document.getElementById("startDate").value = "";
+    document.getElementById("endDate").value = "";
+    filterInstances.forEach(f => f.reset());
+    render();
+  });
+
+  // ----- INIT -----
+  populateFilters();
+  render();
+  </script>
+</body>
+</html>
