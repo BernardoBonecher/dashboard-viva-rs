@@ -152,7 +152,7 @@
     </section>
 
     <!-- KPIs -->
-    <section class="grid grid-cols-2 md:grid-cols-5 gap-4">
+    <section class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
       <div class="bg-white rounded-xl shadow-sm p-5">
         <p class="text-xs uppercase text-slate-500 font-semibold">Sessões</p>
         <p class="text-2xl font-bold text-slate-800 mt-1" id="kpiSessions">0</p>
@@ -165,6 +165,11 @@
         <p class="text-xs uppercase text-slate-500 font-semibold">Visualizações</p>
         <p class="text-2xl font-bold text-slate-800 mt-1" id="kpiPageviews">0</p>
         <p class="text-[10px] text-slate-400 mt-1">pageviews + screen views</p>
+      </div>
+      <div class="bg-white rounded-xl shadow-sm p-5" title="Interesse de compra: visualizações em páginas cujo URL contém 'redirect' (replica filtro do Looker 'Redirects para parceiros').">
+        <p class="text-xs uppercase text-slate-500 font-semibold">Interesse de compra</p>
+        <p class="text-2xl font-bold text-slate-800 mt-1" id="kpiInteresseCompra">0</p>
+        <p class="text-[10px] text-slate-400 mt-1">cliques em redirects p/ parceiros</p>
       </div>
       <div class="bg-white rounded-xl shadow-sm p-5" title="Duração média da sessão (GA4 averageSessionDuration), ponderada pelas sessões dos dados filtrados.">
         <p class="text-xs uppercase text-slate-500 font-semibold">Duração média / sessão</p>
@@ -662,12 +667,16 @@
       acc.tempo += r.tempo_engajamento;
       acc.duracao_pond += r.duracao_sessao * r.sessoes;
       acc.engaj_pond += r.taxa_engajamento * r.sessoes;
+      // Interesse de compra = pageviews em páginas cujo URL contém "redirect"
+      // (mesmo filtro que o Looker usa em "Redirects para parceiros").
+      if (r.pagina.toLowerCase().includes("redirect")) acc.interesse += r.pageviews;
       return acc;
-    }, { sessoes: 0, usuarios: 0, pageviews: 0, tempo: 0, duracao_pond: 0, engaj_pond: 0 });
+    }, { sessoes: 0, usuarios: 0, pageviews: 0, tempo: 0, duracao_pond: 0, engaj_pond: 0, interesse: 0 });
 
     document.getElementById("kpiSessions").textContent = fmt.format(totals.sessoes);
     document.getElementById("kpiUsers").textContent = fmt.format(totals.usuarios);
     document.getElementById("kpiPageviews").textContent = fmt.format(totals.pageviews);
+    document.getElementById("kpiInteresseCompra").textContent = fmt.format(totals.interesse);
     document.getElementById("kpiAvgTime").textContent = totals.sessoes ? fmtDuration(totals.duracao_pond / totals.sessoes) : "0s";
     document.getElementById("kpiEngagement").textContent = totals.sessoes ? (totals.engaj_pond / totals.sessoes * 100).toFixed(1) + "%" : "0%";
 
