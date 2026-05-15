@@ -84,8 +84,11 @@ def fetch_granular_data(client) -> pd.DataFrame:
         ],
         metrics=[
             Metric(name="sessions"),
+            Metric(name="totalUsers"),
             Metric(name="screenPageViews"),
             Metric(name="userEngagementDuration"),
+            Metric(name="averageSessionDuration"),
+            Metric(name="engagementRate"),
             Metric(name="eventCount"),
         ],
         transform_row=lambda row: {
@@ -95,9 +98,12 @@ def fetch_granular_data(client) -> pd.DataFrame:
             "cidade": row.dimension_values[3].value or "(não definida)",
             "origem": row.dimension_values[4].value or "(direto)",
             "sessoes": int(row.metric_values[0].value),
-            "pageviews": int(row.metric_values[1].value),
-            "tempo_engajamento": float(row.metric_values[2].value),
-            "eventos": int(row.metric_values[3].value),
+            "usuarios": int(row.metric_values[1].value),
+            "pageviews": int(row.metric_values[2].value),
+            "tempo_engajamento": float(row.metric_values[3].value),
+            "duracao_sessao": float(row.metric_values[4].value),
+            "taxa_engajamento": float(row.metric_values[5].value),
+            "eventos": int(row.metric_values[6].value),
         },
         label="granular",
     )
@@ -161,8 +167,11 @@ def _compact_granular(df: pd.DataFrame) -> dict:
             cid_idx[r.cidade],
             ori_idx[r.origem],
             r.sessoes,
+            r.usuarios,
             r.pageviews,
             round(r.tempo_engajamento, 1),
+            round(r.duracao_sessao, 1),
+            round(r.taxa_engajamento, 4),
             r.eventos,
         ]
         for r in df.itertuples(index=False)

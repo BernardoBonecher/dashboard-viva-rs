@@ -153,10 +153,10 @@
 
     <!-- KPIs -->
     <section class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-      <div class="bg-white rounded-xl shadow-sm p-5" title="Total de usuários únicos (GA4 totalUsers), calculado a partir da query sem pagePath — não infla por número de páginas visitadas. Não afetado por filtros de Tipo/Página.">
+      <div class="bg-white rounded-xl shadow-sm p-5" title="Total de usuários únicos (GA4 totalUsers).">
         <p class="text-xs uppercase text-slate-500 font-semibold">Total de usuários únicos</p>
         <p class="text-2xl font-bold text-slate-800 mt-1" id="kpiUsers">0</p>
-        <p class="text-[10px] text-slate-400 mt-1">não afetado por filtro de página</p>
+        <p class="text-[10px] text-slate-400 mt-1" id="kpiUsersNote">total no período</p>
       </div>
       <div class="bg-white rounded-xl shadow-sm p-5" title="Visualizações (GA4 screenPageViews): page_view + screen_view events. Repetições contam.">
         <p class="text-xs uppercase text-slate-500 font-semibold">Visualizações</p>
@@ -298,10 +298,13 @@
       titulo,
       cidade: COMPACT.cidades[r[2]],
       origem: COMPACT.origens[r[3]],
-      sessoes: r[4],        // inflado por pagePath — só usar em rankings relativos
-      pageviews: r[5],
-      tempo_engajamento: r[6],
-      eventos: r[7],
+      sessoes: r[4],
+      usuarios: r[5],
+      pageviews: r[6],
+      tempo_engajamento: r[7],
+      duracao_sessao: r[8],
+      taxa_engajamento: r[9],
+      eventos: r[10],
       tipo: classifyPageType(pagina, titulo),
     };
   });
@@ -689,16 +692,19 @@
   function render() {
     const filtered = RAW.filter(passesFilters);
 
-    // KPIs da granular: Visualizações e Interesse de compra (afetados por todos os filtros)
+    // Agrega métricas da granular (afetadas por TODOS os filtros, inclusive página/tipo).
     const granKpi = filtered.reduce((acc, r) => {
       acc.pageviews += r.pageviews;
+      acc.sessoes += r.sessoes;
+      acc.usuarios += r.usuarios;
+      acc.duracao_pond += r.duracao_sessao * r.sessoes;
+      acc.engaj_pond += r.taxa_engajamento * r.sessoes;
       // Interesse de compra = pageviews em páginas cujo URL contém "redirect"
-      // (mesmo filtro que o Looker usa em "Redirects para parceiros").
       if (r.pagina.toLowerCase().includes("redirect")) acc.interesse += r.pageviews;
       return acc;
-    }, { pageviews: 0, interesse: 0 });
+    }, { pageviews: 0, interesse: 0, sessoes: 0, usuarios: 0, duracao_pond: 0, engaj_pond: 0 });
 
-    // KPIs da TOTALS: usuários, duração, engajamento (só afetados por data/cidade/origem)
+    // Agrega métricas da TOTALS (afetadas só por data/cidade/origem, sem inflar por página).
     const totFiltered = TOTALS.filter(passesFiltersTotals);
     const totKpi = totFiltered.reduce((acc, r) => {
       acc.sessoes += r.sessoes;
@@ -708,11 +714,22 @@
       return acc;
     }, { sessoes: 0, usuarios: 0, duracao_pond: 0, engaj_pond: 0 });
 
-    document.getElementById("kpiUsers").textContent = fmt.format(totKpi.usuarios);
+    // Sem filtros de página/tipo → TOTALS (precisos, batem com Looker).
+    // Com filtros de página/tipo → GRANULAR (refletem o filtro, mas inflados).
+    const temFiltroPagina = state.filters.excludedTypes.size > 0 || state.filters.excludedPages.size > 0;
+    const kpi = temFiltroPagina ? granKpi : totKpi;
+
+    document.getElementById("kpiUsers").textContent = fmt.format(kpi.usuarios);
     document.getElementById("kpiPageviews").textContent = fmt.format(granKpi.pageviews);
     document.getElementById("kpiInteresseCompra").textContent = fmt.format(granKpi.interesse);
-    document.getElementById("kpiAvgTime").textContent = totKpi.sessoes ? fmtDuration(totKpi.duracao_pond / totKpi.sessoes) : "0s";
-    document.getElementById("kpiEngagement").textContent = totKpi.sessoes ? (totKpi.engaj_pond / totKpi.sessoes * 100).toFixed(1) + "%" : "0%";
+    document.getElementById("kpiAvgTime").textContent = kpi.sessoes ? fmtDuration(kpi.duracao_pond / kpi.sessoes) : "0s";
+    document.getElementById("kpiEngagement").textContent = kpi.sessoes ? (kpi.engaj_pond / kpi.sessoes * 100).toFixed(1) + "%" : "0%";
+
+    // Nota explicativa dinâmica embaixo do card de usuários
+    const usersNote = document.getElementById("kpiUsersNote");
+    if (usersNote) usersNote.textContent = temFiltroPagina
+      ? "filtrado por tipo/página (aprox.)"
+      : "total no período";
 
     // Gráfico por dia: pageviews da granular, sessões da TOTALS (corretas)
     const daily = aggregate(filtered, r => r.data).sort((a, b) => a.key.localeCompare(b.key));
