@@ -6,8 +6,43 @@
   <title>Viva o RS — Dashboard de Acessos</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    :root {
+      --color-primary: #0891B2;
+      --color-primary-dark: #0E7490;
+      --color-accent: #F59E0B;
+      --color-text: #0F172A;
+      --color-text-light: #64748B;
+      --color-border: #E2E8F0;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      letter-spacing: -0.011em;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* Logo "VIVA O RS" estilizada — caixa preta tipográfica */
+    .logo-mark {
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: #0F172A;
+      color: white;
+      padding: 8px 10px;
+      font-weight: 900;
+      line-height: 1.05;
+      font-size: 11px;
+      letter-spacing: 1.5px;
+      border-radius: 4px;
+      min-width: 56px;
+    }
+    .logo-mark span { display: block; }
 
     /* chips (usados pelo filtro de status QUENTE/MORNO/FRIO) */
     .chip {
@@ -19,12 +54,12 @@
       background: #f9fafb; color: #374151;
     }
     .chip:hover { background: #f3f4f6; }
-    .chip.active { background: #047857; color: white; border-color: #047857; }
+    .chip.active { background: #0891B2; color: white; border-color: #0891B2; }
 
     /* heat tags */
     .heat-hot { background: #fee2e2; color: #b91c1c; }
     .heat-warm { background: #fef3c7; color: #b45309; }
-    .heat-cold { background: #dbeafe; color: #1d4ed8; }
+    .heat-cold { background: #e0e7ff; color: #4338ca; }
     .heat-tag {
       display: inline-block; padding: 0.125rem 0.5rem;
       border-radius: 9999px; font-size: 0.6875rem; font-weight: 600;
@@ -44,7 +79,7 @@
       min-height: 56px;
     }
     .filter-button:hover { border-color: #6b7280; }
-    .filter-button.open { border-color: #047857; box-shadow: 0 0 0 3px rgba(4, 120, 87, 0.15); }
+    .filter-button.open { border-color: #0891B2; box-shadow: 0 0 0 3px rgba(8, 145, 178, 0.15); }
     .filter-button .label-wrap { display: flex; flex-direction: column; flex: 1; min-width: 0; gap: 2px; }
     .filter-button .label-text {
       font-size: 0.6875rem; text-transform: uppercase; color: #6b7280;
@@ -55,7 +90,7 @@
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
     .filter-button .caret { color: #9ca3af; margin-left: 0.5rem; transition: transform 0.15s; flex-shrink: 0; }
-    .filter-button.open .caret { transform: rotate(180deg); color: #047857; }
+    .filter-button.open .caret { transform: rotate(180deg); color: #0891B2; }
 
     .filter-dropdown {
       position: absolute; top: calc(100% + 4px); left: 0; right: 0;
@@ -69,7 +104,7 @@
 
     .filter-header {
       display: flex; align-items: center; justify-content: space-between;
-      background: linear-gradient(to right, #1e6dd8, #2563eb);
+      background: linear-gradient(135deg, var(--color-primary-dark), var(--color-primary));
       color: white; padding: 0.75rem 0.875rem;
     }
     .filter-header label {
@@ -85,7 +120,7 @@
       font-size: 0.8125rem; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' fill='none' stroke='%239ca3af' stroke-width='2' viewBox='0 0 24 24'><circle cx='11' cy='11' r='8'/><path d='m21 21-4.35-4.35'/></svg>");
       background-repeat: no-repeat; background-position: 0.5rem center;
     }
-    .filter-search:focus { outline: none; border-color: #047857; box-shadow: 0 0 0 2px rgba(4,120,87,0.1); }
+    .filter-search:focus { outline: none; border-color: #0891B2; box-shadow: 0 0 0 2px rgba(8,145,178,0.1); }
 
     .filter-options { max-height: 320px; overflow-y: auto; padding: 0.5rem; }
     .filter-options label {
@@ -94,7 +129,7 @@
       cursor: pointer; font-size: 0.8125rem;
     }
     .filter-options label:hover { background: #f3f4f6; }
-    .filter-options input[type=checkbox] { accent-color: #2563eb; flex-shrink: 0; width: 0.875rem; height: 0.875rem; }
+    .filter-options input[type=checkbox] { accent-color: var(--color-primary); flex-shrink: 0; width: 0.875rem; height: 0.875rem; }
     .filter-options .opt-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
     .filter-options .opt-primary { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #1f2937; }
     .filter-options .opt-secondary { font-size: 0.6875rem; color: #9ca3af; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -106,19 +141,25 @@
     th { background: #f9fafb; font-size: 0.75rem; text-transform: uppercase; color: #6b7280; font-weight: 600; }
     tbody tr { border-top: 1px solid #f3f4f6; }
     tbody tr:hover { background: #f9fafb; }
-    .truncate-cell { max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .truncate-cell { max-width: 420px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   </style>
 </head>
 <body class="bg-slate-50 text-slate-800">
 
-  <header class="bg-gradient-to-r from-emerald-700 to-emerald-600 text-white shadow">
-    <div class="max-w-7xl mx-auto px-6 py-5">
-      <div class="flex items-center justify-between flex-wrap gap-2">
-        <div>
-          <h1 class="text-2xl font-bold">Viva o RS — Dashboard de Acessos</h1>
-          <p class="text-sm text-emerald-100">Período: <span>__START_DATE__ a __END_DATE__</span></p>
+  <header class="bg-white border-b border-slate-200">
+    <div class="max-w-7xl mx-auto px-6 py-4">
+      <div class="flex items-center justify-between flex-wrap gap-3">
+        <div class="flex items-center gap-4">
+          <div class="logo-mark">
+            <span>VIVA</span>
+            <span>O RS</span>
+          </div>
+          <div>
+            <h1 class="text-lg font-bold text-slate-900 leading-tight">Dashboard de Acessos</h1>
+            <p class="text-xs text-slate-500 mt-0.5">Período: <span class="font-medium text-slate-700">__START_DATE__ a __END_DATE__</span></p>
+          </div>
         </div>
-        <p class="text-xs text-emerald-200">Atualizado em __GENERATED_AT__</p>
+        <p class="text-xs text-slate-400">Atualizado em __GENERATED_AT__</p>
       </div>
     </div>
   </header>
@@ -129,17 +170,17 @@
     <section class="bg-white rounded-xl shadow-sm p-5">
       <div class="flex items-center justify-between mb-4">
         <h2 class="text-lg font-semibold text-slate-700">Filtros</h2>
-        <button id="clearFilters" class="text-sm text-emerald-700 hover:text-emerald-900 font-medium">Limpar tudo</button>
+        <button id="clearFilters" class="text-sm text-cyan-700 hover:text-cyan-900 font-medium">Limpar tudo</button>
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
         <div>
           <label class="text-xs uppercase font-semibold text-slate-500 block mb-1">Data inicial</label>
-          <input type="date" id="startDate" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none" />
+          <input type="date" id="startDate" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-cyan-500 focus:outline-none" />
         </div>
         <div>
           <label class="text-xs uppercase font-semibold text-slate-500 block mb-1">Data final</label>
-          <input type="date" id="endDate" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none" />
+          <input type="date" id="endDate" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-cyan-500 focus:outline-none" />
         </div>
       </div>
 
@@ -736,30 +777,52 @@
     const dailyTot = aggregateTotals(totFiltered, r => r.data);
     const sessoesPorDia = new Map(dailyTot.map(d => [d.key, d.sessoes]));
     Plotly.react("chartDaily", [
-      { x: daily.map(d => d.key), y: daily.map(d => d.pageviews), type: "scatter", mode: "lines+markers", name: "Visualizações", line: { color: "#047857", width: 3 }, marker: { size: 6 } },
+      { x: daily.map(d => d.key), y: daily.map(d => d.pageviews), type: "scatter", mode: "lines+markers", name: "Visualizações", line: { color: "#0891B2", width: 3 }, marker: { size: 6 } },
       { x: daily.map(d => d.key), y: daily.map(d => sessoesPorDia.get(d.key) || 0), type: "scatter", mode: "lines+markers", name: "Sessões", line: { color: "#f59e0b", width: 2, dash: "dot" } },
     ], { margin: { t: 10, r: 20, b: 40, l: 50 }, hovermode: "x unified", legend: { orientation: "h", y: -0.2 } }, { displayModeBar: false, responsive: true });
 
-    // Pizza cidades (top 10) — sessões corretas via TOTALS
+    // Top cidades (barras horizontais — mais legíveis que pizza com 10+ categorias)
     const cityTotAgg = aggregateTotals(totFiltered, r => r.cidade).sort((a, b) => b.sessoes - a.sessoes);
     const cityRawAgg = aggregate(filtered, r => r.cidade);
-    const top10 = cityTotAgg.slice(0, 10);
-    const rest = cityTotAgg.slice(10).reduce((s, c) => s + c.sessoes, 0);
-    const cityLabels = top10.map(c => c.key);
-    const cityValues = top10.map(c => c.sessoes);
-    if (rest > 0) { cityLabels.push("Outras"); cityValues.push(rest); }
-    Plotly.react("chartCity", [{ labels: cityLabels, values: cityValues, type: "pie", hole: 0.45, textinfo: "label+percent", textposition: "outside" }],
-      { margin: { t: 10, r: 10, b: 10, l: 10 }, showlegend: false }, { displayModeBar: false, responsive: true });
+    const cityTop = cityTotAgg.slice(0, 12);
+    Plotly.react("chartCity", [{
+      type: "bar", orientation: "h",
+      x: cityTop.map(c => c.sessoes).reverse(),
+      y: cityTop.map(c => c.key).reverse(),
+      marker: { color: "#0891B2" },
+      text: cityTop.map(c => fmt.format(c.sessoes)).reverse(),
+      textposition: "outside",
+      cliponaxis: false,
+      hovertemplate: "<b>%{y}</b><br>%{x:,} sessões<extra></extra>",
+    }], {
+      margin: { t: 10, r: 60, b: 30, l: 10 },
+      xaxis: { showgrid: false, showticklabels: false, zeroline: false },
+      yaxis: { automargin: true, tickfont: { size: 12, color: "#475569" } },
+      showlegend: false,
+      plot_bgcolor: "white",
+      paper_bgcolor: "white",
+    }, { displayModeBar: false, responsive: true });
 
-    // Pizza origens — sessões corretas via TOTALS
+    // Top origens (barras horizontais)
     const originAgg = aggregateTotals(totFiltered, r => r.origem).sort((a, b) => b.sessoes - a.sessoes);
-    const oTop = originAgg.slice(0, 8);
-    const oRest = originAgg.slice(8).reduce((s, c) => s + c.sessoes, 0);
-    const oLabels = oTop.map(c => c.key);
-    const oValues = oTop.map(c => c.sessoes);
-    if (oRest > 0) { oLabels.push("Outras"); oValues.push(oRest); }
-    Plotly.react("chartOrigin", [{ labels: oLabels, values: oValues, type: "pie", hole: 0.45, textinfo: "label+percent", textposition: "outside" }],
-      { margin: { t: 10, r: 10, b: 10, l: 10 }, showlegend: false }, { displayModeBar: false, responsive: true });
+    const oTop = originAgg.slice(0, 10);
+    Plotly.react("chartOrigin", [{
+      type: "bar", orientation: "h",
+      x: oTop.map(c => c.sessoes).reverse(),
+      y: oTop.map(c => c.key).reverse(),
+      marker: { color: "#F59E0B" },
+      text: oTop.map(c => fmt.format(c.sessoes)).reverse(),
+      textposition: "outside",
+      cliponaxis: false,
+      hovertemplate: "<b>%{y}</b><br>%{x:,} sessões<extra></extra>",
+    }], {
+      margin: { t: 10, r: 60, b: 30, l: 10 },
+      xaxis: { showgrid: false, showticklabels: false, zeroline: false },
+      yaxis: { automargin: true, tickfont: { size: 12, color: "#475569" } },
+      showlegend: false,
+      plot_bgcolor: "white",
+      paper_bgcolor: "white",
+    }, { displayModeBar: false, responsive: true });
 
     // Funil
     const pagesAll = aggregateByPage(filtered);
@@ -772,11 +835,23 @@
     Plotly.react("chartFunnel", [{
       type: "bar", orientation: "h",
       x: funnel.map(p => p.pageviews),
-      y: funnel.map(p => (p.titulo || p.pagina).slice(0, 50)),
+      y: funnel.map(p => {
+        const label = p.titulo || p.pagina;
+        return label.length > 65 ? label.slice(0, 63) + "…" : label;
+      }),
       text: funnel.map(p => fmt.format(p.pageviews) + " pv · " + fmtDuration(p.avgTime)),
-      textposition: "auto",
-      marker: { color: funnel.map((_, i) => `rgba(4, 120, 87, ${0.4 + (i / funnel.length) * 0.6})`) },
-    }], { margin: { t: 10, r: 20, b: 40, l: 220 }, xaxis: { title: "Pageviews" } }, { displayModeBar: false, responsive: true });
+      textposition: "outside",
+      cliponaxis: false,
+      customdata: funnel.map(p => [p.titulo || p.pagina, p.pagina]),
+      hovertemplate: "<b>%{customdata[0]}</b><br>%{customdata[1]}<br>%{x:,} pageviews<extra></extra>",
+      marker: { color: funnel.map((_, i) => `rgba(8, 145, 178, ${0.45 + (i / funnel.length) * 0.55})`) },
+    }], {
+      margin: { t: 10, r: 80, b: 40, l: 10 },
+      xaxis: { title: "Pageviews", showgrid: true, gridcolor: "#f1f5f9" },
+      yaxis: { automargin: true, tickfont: { size: 11, color: "#475569" } },
+      plot_bgcolor: "white",
+      paper_bgcolor: "white",
+    }, { displayModeBar: false, responsive: true });
 
     // Tabela páginas com heat
     const pagesWithHeat = classifyHeat(pagesAll).sort((a, b) => b.pageviews - a.pageviews);
