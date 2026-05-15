@@ -1,6 +1,8 @@
 name: Atualizar dashboard
 
 on:
+  push:
+    branches: [main]   # roda automaticamente a cada commit em main
   schedule:
     # 08:00 UTC = 05:00 BRT, todos os dias. Ajuste se quiser outro horário.
     - cron: "0 8 * * *"
