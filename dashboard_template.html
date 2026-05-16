@@ -143,6 +143,61 @@
     tbody tr:hover { background: #f9fafb; }
     .truncate-cell { max-width: 420px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+    /* Sidebar de navegação */
+    .sidebar-toggle {
+      position: fixed; top: 18px; left: 18px; z-index: 60;
+      width: 40px; height: 40px;
+      display: flex; align-items: center; justify-content: center;
+      background: white; border: 1px solid var(--color-border); border-radius: 8px;
+      cursor: pointer; box-shadow: 0 2px 6px rgba(15,23,42,0.06);
+      transition: all 0.15s;
+    }
+    .sidebar-toggle:hover { background: #f8fafc; border-color: #94a3b8; }
+    .sidebar-toggle svg { width: 18px; height: 18px; color: #475569; }
+
+    .sidebar {
+      position: fixed; top: 0; left: 0; bottom: 0; width: 260px;
+      background: white; border-right: 1px solid var(--color-border);
+      z-index: 80; transform: translateX(-100%); transition: transform 0.2s ease-out;
+      display: flex; flex-direction: column;
+    }
+    .sidebar.open { transform: translateX(0); }
+    .sidebar-header {
+      padding: 20px; display: flex; justify-content: space-between; align-items: center;
+      border-bottom: 1px solid var(--color-border);
+    }
+    .sidebar-close {
+      background: none; border: none; font-size: 22px; cursor: pointer;
+      color: #94a3b8; line-height: 1; padding: 4px 8px;
+    }
+    .sidebar-close:hover { color: var(--color-text); }
+    .sidebar nav { padding: 14px 12px; }
+    .sidebar-link {
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 12px; border-radius: 7px;
+      color: #475569; text-decoration: none; font-size: 14px; font-weight: 500;
+      margin-bottom: 4px; cursor: pointer;
+    }
+    .sidebar-link:hover { background: #f1f5f9; color: var(--color-text); }
+    .sidebar-link.active { background: var(--color-primary); color: white; }
+    .sidebar-link .sb-icon { font-size: 16px; width: 20px; text-align: center; }
+
+    .sidebar-backdrop {
+      position: fixed; inset: 0; background: rgba(15, 23, 42, 0.4);
+      z-index: 75; opacity: 0; pointer-events: none; transition: opacity 0.2s;
+    }
+    .sidebar-backdrop.open { opacity: 1; pointer-events: auto; }
+
+    /* Indicadores de variação (KPI delta) */
+    .kpi-delta {
+      font-size: 11px; font-weight: 600; margin-top: 6px;
+      display: flex; align-items: center; gap: 4px; min-height: 1.2em;
+    }
+    .kpi-delta.positive { color: #059669; }
+    .kpi-delta.negative { color: #dc2626; }
+    .kpi-delta.neutral { color: #94a3b8; }
+    .kpi-delta .delta-label { color: #94a3b8; font-weight: 500; }
+
     /* Instagram */
     .ig-clamp-2 {
       display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
@@ -169,6 +224,27 @@
   </style>
 </head>
 <body class="bg-slate-50 text-slate-800">
+
+  <button id="sidebarToggle" class="sidebar-toggle" aria-label="Abrir menu">
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/>
+    </svg>
+  </button>
+  <aside id="sidebar" class="sidebar" aria-hidden="true">
+    <div class="sidebar-header">
+      <div class="logo-mark"><span>VIVA</span><span>O RS</span></div>
+      <button id="sidebarClose" class="sidebar-close" aria-label="Fechar menu">×</button>
+    </div>
+    <nav>
+      <a href="#" class="sidebar-link active" data-page="ga4">
+        <span class="sb-icon">📊</span><span>Site (GA4)</span>
+      </a>
+      <a href="#" class="sidebar-link" data-page="instagram">
+        <span class="sb-icon">📱</span><span>Instagram</span>
+      </a>
+    </nav>
+  </aside>
+  <div id="sidebarBackdrop" class="sidebar-backdrop"></div>
 
   <header class="bg-white border-b border-slate-200">
     <div class="max-w-7xl mx-auto px-6 py-4">
@@ -216,30 +292,37 @@
       </div>
     </section>
 
+    <div data-page-content="ga4">
+
     <!-- KPIs -->
     <section class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
       <div class="bg-white rounded-xl shadow-sm p-5" title="Total de usuários únicos (GA4 totalUsers).">
         <p class="text-xs uppercase text-slate-500 font-semibold">Total de usuários únicos</p>
         <p class="text-2xl font-bold text-slate-800 mt-1" id="kpiUsers">0</p>
+        <p class="kpi-delta" id="kpiUsersDelta"></p>
         <p class="text-[10px] text-slate-400 mt-1" id="kpiUsersNote">total no período</p>
       </div>
       <div class="bg-white rounded-xl shadow-sm p-5" title="Visualizações (GA4 screenPageViews): page_view + screen_view events. Repetições contam.">
         <p class="text-xs uppercase text-slate-500 font-semibold">Visualizações</p>
         <p class="text-2xl font-bold text-slate-800 mt-1" id="kpiPageviews">0</p>
+        <p class="kpi-delta" id="kpiPageviewsDelta"></p>
         <p class="text-[10px] text-slate-400 mt-1">pageviews + screen views</p>
       </div>
       <div class="bg-white rounded-xl shadow-sm p-5" title="Interesse de compra: visualizações em páginas cujo URL contém 'redirect' (replica filtro do Looker 'Redirects para parceiros').">
         <p class="text-xs uppercase text-slate-500 font-semibold">Interesse de compra</p>
         <p class="text-2xl font-bold text-slate-800 mt-1" id="kpiInteresseCompra">0</p>
+        <p class="kpi-delta" id="kpiInteresseCompraDelta"></p>
         <p class="text-[10px] text-slate-400 mt-1">cliques em redirects p/ parceiros</p>
       </div>
       <div class="bg-white rounded-xl shadow-sm p-5" title="Duração média da sessão (GA4 averageSessionDuration), ponderada pelas sessões dos dados filtrados.">
         <p class="text-xs uppercase text-slate-500 font-semibold">Duração média / sessão</p>
         <p class="text-2xl font-bold text-slate-800 mt-1" id="kpiAvgTime">0s</p>
+        <p class="kpi-delta" id="kpiAvgTimeDelta"></p>
       </div>
       <div class="bg-white rounded-xl shadow-sm p-5" title="Taxa de engajamento (GA4 engagementRate): sessões engajadas / total de sessões.">
         <p class="text-xs uppercase text-slate-500 font-semibold">Taxa de engajamento</p>
         <p class="text-2xl font-bold text-slate-800 mt-1" id="kpiEngagement">0%</p>
+        <p class="kpi-delta" id="kpiEngagementDelta"></p>
         <p class="text-[10px] text-slate-400 mt-1">sessões engajadas / total</p>
       </div>
     </section>
@@ -321,6 +404,10 @@
       </div>
     </section>
 
+    </div><!-- /data-page-content=ga4 -->
+
+    <div data-page-content="instagram" style="display:none;">
+
     <!-- INSTAGRAM -->
     <section class="bg-white rounded-xl shadow-sm p-5" id="instagramSection" style="display:none;">
       <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
@@ -335,24 +422,29 @@
         <div class="bg-slate-50 rounded-lg p-4">
           <p class="text-xs uppercase text-slate-500 font-semibold">Seguidores</p>
           <p class="text-xl font-bold text-slate-800 mt-1" id="igFollowers">0</p>
+          <p class="kpi-delta" id="igFollowersDelta"></p>
         </div>
         <div class="bg-slate-50 rounded-lg p-4">
           <p class="text-xs uppercase text-slate-500 font-semibold">Total de posts</p>
           <p class="text-xl font-bold text-slate-800 mt-1" id="igPosts">0</p>
+          <p class="kpi-delta" id="igPostsDelta"></p>
         </div>
         <div class="bg-slate-50 rounded-lg p-4" title="Média de curtidas + comentários dos posts recentes">
           <p class="text-xs uppercase text-slate-500 font-semibold">Eng. médio / post</p>
           <p class="text-xl font-bold text-slate-800 mt-1" id="igAvgEng">0</p>
+          <p class="kpi-delta" id="igAvgEngDelta"></p>
           <p class="text-[10px] text-slate-400 mt-1">curtidas + comentários</p>
         </div>
         <div class="bg-slate-50 rounded-lg p-4" title="Alcance médio (contas únicas que viram o post)">
           <p class="text-xs uppercase text-slate-500 font-semibold">Alcance médio / post</p>
           <p class="text-xl font-bold text-slate-800 mt-1" id="igAvgReach">0</p>
+          <p class="kpi-delta" id="igAvgReachDelta"></p>
           <p class="text-[10px] text-slate-400 mt-1">contas únicas</p>
         </div>
         <div class="bg-slate-50 rounded-lg p-4" title="Total de saves nos posts recentes">
           <p class="text-xs uppercase text-slate-500 font-semibold">Saves totais</p>
           <p class="text-xl font-bold text-slate-800 mt-1" id="igSaves">0</p>
+          <p class="kpi-delta" id="igSavesDelta"></p>
           <p class="text-[10px] text-slate-400 mt-1">posts recentes</p>
         </div>
       </div>
@@ -368,6 +460,8 @@
       </div>
       <div id="igPostsGrid" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3"></div>
     </section>
+
+    </div><!-- /data-page-content=instagram -->
 
     <footer class="text-center text-xs text-slate-400 py-6">
       Gerado por <code>build_dashboard.py</code> · dados do GA4 + Instagram Graph API
@@ -543,6 +637,81 @@
       else if (coldPV && coldT) heat = "cold";
       return { ...p, avgTime: avgT, heat };
     });
+  }
+
+  // ============================================================
+  // PERÍODO ANTERIOR + DELTAS
+  // ============================================================
+  function getPreviousPeriod() {
+    const { startDate, endDate } = state.filters;
+    if (!startDate || !endDate) return null;
+    const start = new Date(startDate + "T00:00:00");
+    const end = new Date(endDate + "T00:00:00");
+    const diffDays = Math.round((end - start) / 86400000) + 1;
+    const prevEnd = new Date(start.getTime() - 86400000);
+    const prevStart = new Date(prevEnd.getTime() - (diffDays - 1) * 86400000);
+    const fmtIso = d => d.toISOString().slice(0, 10);
+    return { startDate: fmtIso(prevStart), endDate: fmtIso(prevEnd) };
+  }
+
+  function setDelta(elementId, current, previous) {
+    const el = document.getElementById(elementId);
+    if (!el) return;
+    if (previous == null || previous === 0) {
+      el.innerHTML = "";
+      el.className = "kpi-delta";
+      return;
+    }
+    const diff = ((current - previous) / previous) * 100;
+    const sign = diff >= 0 ? "+" : "";
+    const arrow = diff >= 0 ? "▲" : "▼";
+    const cls = diff >= 0 ? "positive" : "negative";
+    el.innerHTML = `<span>${arrow} ${sign}${diff.toFixed(1)}%</span><span class="delta-label">vs período anterior</span>`;
+    el.className = `kpi-delta ${cls}`;
+  }
+
+  function rawFilterPeriod(start, end) {
+    return RAW.filter(r => {
+      if (start && r.data < start) return false;
+      if (end && r.data > end) return false;
+      if (state.filters.excludedTypes.has(r.tipo)) return false;
+      if (state.filters.excludedPages.has(r.pagina)) return false;
+      if (state.filters.excludedCities.has(r.cidade)) return false;
+      if (state.filters.excludedOrigins.has(r.origem)) return false;
+      return true;
+    });
+  }
+
+  function totalsFilterPeriod(start, end) {
+    return TOTALS.filter(r => {
+      if (start && r.data < start) return false;
+      if (end && r.data > end) return false;
+      if (state.filters.excludedCities.has(r.cidade)) return false;
+      if (state.filters.excludedOrigins.has(r.origem)) return false;
+      return true;
+    });
+  }
+
+  function calcGranularKpis(rows) {
+    return rows.reduce((acc, r) => {
+      acc.pageviews += r.pageviews;
+      acc.sessoes += r.sessoes;
+      acc.usuarios += r.usuarios;
+      acc.duracao_pond += r.duracao_sessao * r.sessoes;
+      acc.engaj_pond += r.taxa_engajamento * r.sessoes;
+      if (r.pagina.toLowerCase().includes("redirect")) acc.interesse += r.pageviews;
+      return acc;
+    }, { pageviews: 0, interesse: 0, sessoes: 0, usuarios: 0, duracao_pond: 0, engaj_pond: 0 });
+  }
+
+  function calcTotalsKpis(rows) {
+    return rows.reduce((acc, r) => {
+      acc.sessoes += r.sessoes;
+      acc.usuarios += r.usuarios;
+      acc.duracao_pond += r.duracao_sessao * r.sessoes;
+      acc.engaj_pond += r.taxa_engajamento * r.sessoes;
+      return acc;
+    }, { sessoes: 0, usuarios: 0, duracao_pond: 0, engaj_pond: 0 });
   }
 
   function escapeHtml(s) {
@@ -845,6 +1014,26 @@
       ? "filtrado por tipo/página (aprox.)"
       : "total no período";
 
+    // Deltas vs período anterior do mesmo tamanho
+    const prev = getPreviousPeriod();
+    if (prev) {
+      const prevGran = calcGranularKpis(rawFilterPeriod(prev.startDate, prev.endDate));
+      const prevTot = calcTotalsKpis(totalsFilterPeriod(prev.startDate, prev.endDate));
+      const prevKpi = temFiltroPagina ? prevGran : prevTot;
+      setDelta("kpiUsersDelta", kpi.usuarios, prevKpi.usuarios);
+      setDelta("kpiPageviewsDelta", granKpi.pageviews, prevGran.pageviews);
+      setDelta("kpiInteresseCompraDelta", granKpi.interesse, prevGran.interesse);
+      const avgNow = kpi.sessoes ? kpi.duracao_pond / kpi.sessoes : 0;
+      const avgPrev = prevKpi.sessoes ? prevKpi.duracao_pond / prevKpi.sessoes : 0;
+      setDelta("kpiAvgTimeDelta", avgNow, avgPrev);
+      const engNow = kpi.sessoes ? kpi.engaj_pond / kpi.sessoes : 0;
+      const engPrev = prevKpi.sessoes ? prevKpi.engaj_pond / prevKpi.sessoes : 0;
+      setDelta("kpiEngagementDelta", engNow, engPrev);
+    } else {
+      ["kpiUsersDelta","kpiPageviewsDelta","kpiInteresseCompraDelta","kpiAvgTimeDelta","kpiEngagementDelta"]
+        .forEach(id => setDelta(id, 0, null));
+    }
+
     // Gráfico por dia: pageviews da granular, sessões da TOTALS (corretas)
     const daily = aggregate(filtered, r => r.data).sort((a, b) => a.key.localeCompare(b.key));
     const dailyTot = aggregateTotals(totFiltered, r => r.data);
@@ -959,6 +1148,9 @@
         <td class="text-right text-slate-600">${c.sessoes ? fmtDuration(c.duracao_pond / c.sessoes) : "0s"}</td>
       </tr>
     `).join("") || `<tr><td colspan="6" class="text-center text-slate-400 py-6">Sem dados.</td></tr>`;
+
+    // Instagram também responde a mudanças do filtro de data
+    renderInstagram();
   }
 
   // ============================================================
@@ -991,13 +1183,31 @@
   const INSTAGRAM_DATA = JSON.parse(document.getElementById("ig-data").textContent);
   let igSort = "recent";
 
+  function igPostsInRange(posts, start, end) {
+    if (!start || !end) return posts;
+    return posts.filter(p => {
+      const date = (p.timestamp || "").slice(0, 10);
+      return date >= start && date <= end;
+    });
+  }
+
+  function computeIgKpis(posts) {
+    const sumLikes = posts.reduce((a, p) => a + (p.like_count || 0), 0);
+    const sumComments = posts.reduce((a, p) => a + (p.comments_count || 0), 0);
+    const avgEng = posts.length ? (sumLikes + sumComments) / posts.length : 0;
+    const sumReach = posts.reduce((a, p) => a + (p.reach || 0), 0);
+    const avgReach = posts.length ? sumReach / posts.length : 0;
+    const sumSaves = posts.reduce((a, p) => a + (p.saved || 0), 0);
+    return { avgEng, avgReach, sumSaves };
+  }
+
   function renderInstagram() {
     if (!INSTAGRAM_DATA || !INSTAGRAM_DATA.account) return;
     const section = document.getElementById("instagramSection");
     section.style.display = "";
 
     const account = INSTAGRAM_DATA.account;
-    const posts = INSTAGRAM_DATA.posts || [];
+    const allPosts = INSTAGRAM_DATA.posts || [];
 
     const handle = document.getElementById("igHandle");
     handle.textContent = "@" + account.username;
@@ -1009,16 +1219,27 @@
     document.getElementById("igFollowers").textContent = fmt.format(account.followers_count || 0);
     document.getElementById("igPosts").textContent = fmt.format(account.media_count || 0);
 
-    const sumLikes = posts.reduce((a, p) => a + (p.like_count || 0), 0);
-    const sumComments = posts.reduce((a, p) => a + (p.comments_count || 0), 0);
-    const avgEng = posts.length ? (sumLikes + sumComments) / posts.length : 0;
-    const sumReach = posts.reduce((a, p) => a + (p.reach || 0), 0);
-    const avgReach = posts.length ? sumReach / posts.length : 0;
-    const sumSaves = posts.reduce((a, p) => a + (p.saved || 0), 0);
+    // Filtra posts pelo período do filtro de data (compartilhado com GA4)
+    const posts = igPostsInRange(allPosts, state.filters.startDate, state.filters.endDate);
 
-    document.getElementById("igAvgEng").textContent = fmt.format(Math.round(avgEng));
-    document.getElementById("igAvgReach").textContent = fmt.format(Math.round(avgReach));
-    document.getElementById("igSaves").textContent = fmt.format(sumSaves);
+    const igNow = computeIgKpis(posts);
+    document.getElementById("igAvgEng").textContent = fmt.format(Math.round(igNow.avgEng));
+    document.getElementById("igAvgReach").textContent = fmt.format(Math.round(igNow.avgReach));
+    document.getElementById("igSaves").textContent = fmt.format(igNow.sumSaves);
+
+    // Deltas vs período anterior (seguidores/total posts não têm histórico — sem delta)
+    const prev = getPreviousPeriod();
+    if (prev) {
+      const prevPosts = igPostsInRange(allPosts, prev.startDate, prev.endDate);
+      const igPrev = computeIgKpis(prevPosts);
+      setDelta("igAvgEngDelta", igNow.avgEng, igPrev.avgEng);
+      setDelta("igAvgReachDelta", igNow.avgReach, igPrev.avgReach);
+      setDelta("igSavesDelta", igNow.sumSaves, igPrev.sumSaves);
+    } else {
+      ["igAvgEngDelta","igAvgReachDelta","igSavesDelta"].forEach(id => setDelta(id, 0, null));
+    }
+    setDelta("igFollowersDelta", 0, null);
+    setDelta("igPostsDelta", 0, null);
 
     renderInstagramGrid(posts);
   }
@@ -1070,10 +1291,50 @@
     });
   });
 
+  // ============================================================
+  // SIDEBAR + NAVEGAÇÃO ENTRE PÁGINAS
+  // ============================================================
+  const sidebar = document.getElementById("sidebar");
+  const sidebarBackdrop = document.getElementById("sidebarBackdrop");
+
+  function openSidebar() {
+    sidebar.classList.add("open");
+    sidebarBackdrop.classList.add("open");
+    sidebar.setAttribute("aria-hidden", "false");
+  }
+  function closeSidebar() {
+    sidebar.classList.remove("open");
+    sidebarBackdrop.classList.remove("open");
+    sidebar.setAttribute("aria-hidden", "true");
+  }
+
+  document.getElementById("sidebarToggle").addEventListener("click", openSidebar);
+  document.getElementById("sidebarClose").addEventListener("click", closeSidebar);
+  sidebarBackdrop.addEventListener("click", closeSidebar);
+
+  function switchPage(page) {
+    document.querySelectorAll(".sidebar-link").forEach(l => {
+      l.classList.toggle("active", l.dataset.page === page);
+    });
+    document.querySelectorAll("[data-page-content]").forEach(s => {
+      s.style.display = s.dataset.pageContent === page ? "" : "none";
+    });
+    localStorage.setItem("dashPage", page);
+  }
+
+  document.querySelectorAll(".sidebar-link").forEach(link => {
+    link.addEventListener("click", e => {
+      e.preventDefault();
+      switchPage(link.dataset.page);
+      closeSidebar();
+    });
+  });
+
   // ----- INIT -----
   populateFilters();
   render();
-  renderInstagram();
+  // Restaura última página visitada (default = ga4)
+  switchPage(localStorage.getItem("dashPage") || "ga4");
   </script>
 </body>
 </html>
