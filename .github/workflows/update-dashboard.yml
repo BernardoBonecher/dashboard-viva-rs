@@ -2,14 +2,16 @@ name: Atualizar dashboard
 
 on:
   push:
-    branches: [main]   # roda automaticamente a cada commit em main
+    branches: [main]
+    paths-ignore:
+      - "instagram_history.json"   # evita loop: o próprio workflow commita esse arquivo
   schedule:
     # 08:00 UTC = 05:00 BRT, todos os dias. Ajuste se quiser outro horário.
     - cron: "0 8 * * *"
   workflow_dispatch:  # permite rodar manualmente pela aba Actions
 
 permissions:
-  contents: read
+  contents: write   # precisa de write pra commitar o snapshot diário do IG
   pages: write
   id-token: write
 
@@ -46,6 +48,20 @@ jobs:
           IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
         run: python fetch_instagram.py
         continue-on-error: true   # se token expirar/falhar, segue com só GA4
+
+      - name: Commit Instagram history snapshot
+        if: hashFiles('instagram_history.json') != ''
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add instagram_history.json
+          if git diff --cached --quiet; then
+            echo "Sem mudanças no histórico do Instagram."
+          else
+            git commit -m "Atualiza snapshot diário do Instagram [skip ci]"
+            git pull --rebase
+            git push
+          fi
 
       - name: Build dashboard
         run: python build_dashboard.py

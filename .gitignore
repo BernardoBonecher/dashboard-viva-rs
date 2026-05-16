@@ -3,6 +3,8 @@ credentials/
 *.json
 !package.json
 !package-lock.json
+# Snapshot diário do IG — vai pro repo pra ter histórico de seguidores
+!instagram_history.json
 .env
 .env.*
 

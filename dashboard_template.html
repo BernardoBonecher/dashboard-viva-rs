@@ -654,7 +654,7 @@
     return { startDate: fmtIso(prevStart), endDate: fmtIso(prevEnd) };
   }
 
-  function setDelta(elementId, current, previous) {
+  function setDelta(elementId, current, previous, label) {
     const el = document.getElementById(elementId);
     if (!el) return;
     if (previous == null || previous === 0) {
@@ -666,8 +666,15 @@
     const sign = diff >= 0 ? "+" : "";
     const arrow = diff >= 0 ? "▲" : "▼";
     const cls = diff >= 0 ? "positive" : "negative";
-    el.innerHTML = `<span>${arrow} ${sign}${diff.toFixed(1)}%</span><span class="delta-label">vs período anterior</span>`;
+    const labelText = label || "vs período anterior";
+    el.innerHTML = `<span>${arrow} ${sign}${diff.toFixed(1)}%</span><span class="delta-label">${labelText}</span>`;
     el.className = `kpi-delta ${cls}`;
+  }
+
+  function formatBrDate(iso) {
+    if (!iso) return "";
+    const [y, m, d] = iso.split("-");
+    return `${d}/${m}/${y.slice(2)}`;
   }
 
   function rawFilterPeriod(start, end) {
@@ -1227,7 +1234,7 @@
     document.getElementById("igAvgReach").textContent = fmt.format(Math.round(igNow.avgReach));
     document.getElementById("igSaves").textContent = fmt.format(igNow.sumSaves);
 
-    // Deltas vs período anterior (seguidores/total posts não têm histórico — sem delta)
+    // Deltas vs período anterior (posts: usa janela; seguidores: usa snapshot histórico)
     const prev = getPreviousPeriod();
     if (prev) {
       const prevPosts = igPostsInRange(allPosts, prev.startDate, prev.endDate);
@@ -1238,7 +1245,26 @@
     } else {
       ["igAvgEngDelta","igAvgReachDelta","igSavesDelta"].forEach(id => setDelta(id, 0, null));
     }
-    setDelta("igFollowersDelta", 0, null);
+
+    // Crescimento de seguidores: usa snapshots diários acumulados (instagram_history.json)
+    const history = INSTAGRAM_DATA.history || [];
+    if (history.length >= 2) {
+      const todayFollowers = account.followers_count;
+      let baseline, baselineLabel;
+      if (state.filters.startDate) {
+        // Snapshot mais recente que seja <= startDate. Se não houver, usa o mais antigo disponível.
+        const candidates = history.filter(s => s.date <= state.filters.startDate);
+        baseline = candidates.length ? candidates[candidates.length - 1] : history[0];
+        baselineLabel = `vs ${formatBrDate(baseline.date)}`;
+      } else {
+        baseline = history[0];
+        baselineLabel = `desde ${formatBrDate(baseline.date)}`;
+      }
+      setDelta("igFollowersDelta", todayFollowers, baseline.followers_count, baselineLabel);
+    } else {
+      // Só 1 snapshot ou nenhum — sem histórico suficiente ainda
+      setDelta("igFollowersDelta", 0, null);
+    }
     setDelta("igPostsDelta", 0, null);
 
     renderInstagramGrid(posts);

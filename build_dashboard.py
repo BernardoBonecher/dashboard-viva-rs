@@ -33,6 +33,7 @@ CREDENTIALS_PATH = Path(
 TEMPLATE_PATH = Path(__file__).parent / "dashboard_template.html"
 OUTPUT_PATH = Path(__file__).parent / "dashboard.html"
 INSTAGRAM_PATH = Path(__file__).parent / "instagram_data.json"
+INSTAGRAM_HISTORY_PATH = Path(__file__).parent / "instagram_history.json"
 
 START_DATE = "2025-01-01"
 END_DATE = "yesterday"
@@ -233,9 +234,17 @@ def generate_html(df_granular: pd.DataFrame, df_totals: pd.DataFrame) -> str:
     data_json = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
 
     ig_data = _load_instagram_data()
+    if ig_data and INSTAGRAM_HISTORY_PATH.exists():
+        try:
+            history = json.loads(INSTAGRAM_HISTORY_PATH.read_text(encoding="utf-8"))
+            ig_data["history"] = history.get("snapshots", [])
+        except Exception as e:
+            print(f"  ⚠ Erro lendo {INSTAGRAM_HISTORY_PATH.name}: {e}")
+
     ig_json = json.dumps(ig_data, ensure_ascii=False, separators=(",", ":")) if ig_data else "null"
     if ig_data:
-        print(f"  · Instagram: @{ig_data['account']['username']} ({len(ig_data.get('posts', []))} posts)")
+        n_hist = len(ig_data.get("history", []))
+        print(f"  · Instagram: @{ig_data['account']['username']} ({len(ig_data.get('posts', []))} posts, {n_hist} snapshots no histórico)")
     else:
         print("  · Instagram: (sem dados — fetch_instagram.py não foi executado)")
 
