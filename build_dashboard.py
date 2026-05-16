@@ -32,6 +32,7 @@ CREDENTIALS_PATH = Path(
 )
 TEMPLATE_PATH = Path(__file__).parent / "dashboard_template.html"
 OUTPUT_PATH = Path(__file__).parent / "dashboard.html"
+INSTAGRAM_PATH = Path(__file__).parent / "instagram_data.json"
 
 START_DATE = "2025-01-01"
 END_DATE = "yesterday"
@@ -211,6 +212,17 @@ def _compact_totals(df: pd.DataFrame) -> dict:
     return {"cidades": cidades, "origens": origens, "rows": rows}
 
 
+def _load_instagram_data():
+    """Carrega instagram_data.json se existir (gerado por fetch_instagram.py)."""
+    if not INSTAGRAM_PATH.exists():
+        return None
+    try:
+        return json.loads(INSTAGRAM_PATH.read_text(encoding="utf-8"))
+    except Exception as e:
+        print(f"  ⚠ Erro lendo {INSTAGRAM_PATH.name}: {e}")
+        return None
+
+
 def generate_html(df_granular: pd.DataFrame, df_totals: pd.DataFrame) -> str:
     template = TEMPLATE_PATH.read_text(encoding="utf-8")
 
@@ -220,6 +232,13 @@ def generate_html(df_granular: pd.DataFrame, df_totals: pd.DataFrame) -> str:
     }
     data_json = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
 
+    ig_data = _load_instagram_data()
+    ig_json = json.dumps(ig_data, ensure_ascii=False, separators=(",", ":")) if ig_data else "null"
+    if ig_data:
+        print(f"  · Instagram: @{ig_data['account']['username']} ({len(ig_data.get('posts', []))} posts)")
+    else:
+        print("  · Instagram: (sem dados — fetch_instagram.py não foi executado)")
+
     start_date = df_granular["data"].min() if not df_granular.empty else "—"
     end_date = df_granular["data"].max() if not df_granular.empty else "—"
     generated_at = datetime.now().strftime("%d/%m/%Y %H:%M")
@@ -227,6 +246,7 @@ def generate_html(df_granular: pd.DataFrame, df_totals: pd.DataFrame) -> str:
     return (
         template
         .replace("__DATA_JSON__", data_json)
+        .replace("__INSTAGRAM_JSON__", ig_json)
         .replace("__START_DATE__", _fmt_date(start_date))
         .replace("__END_DATE__", _fmt_date(end_date))
         .replace("__GENERATED_AT__", generated_at)

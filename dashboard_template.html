@@ -142,6 +142,30 @@
     tbody tr { border-top: 1px solid #f3f4f6; }
     tbody tr:hover { background: #f9fafb; }
     .truncate-cell { max-width: 420px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    /* Instagram */
+    .ig-clamp-2 {
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+      overflow: hidden; line-height: 1.35; max-height: 2.7em;
+    }
+    .ig-post {
+      display: flex; flex-direction: column;
+      background: #f8fafc; border-radius: 0.5rem; overflow: hidden;
+      transition: all 0.15s; text-decoration: none; color: inherit;
+      border: 1px solid transparent;
+    }
+    .ig-post:hover { box-shadow: 0 8px 16px -6px rgba(15, 23, 42, 0.12); border-color: var(--color-border); }
+    .ig-post .thumb {
+      aspect-ratio: 1 / 1; background: #e2e8f0;
+      background-size: cover; background-position: center;
+      position: relative;
+    }
+    .ig-post .badge {
+      position: absolute; top: 6px; right: 6px;
+      background: rgba(15, 23, 42, 0.75); color: white;
+      font-size: 9px; font-weight: 700; letter-spacing: 0.5px;
+      padding: 2px 6px; border-radius: 3px; text-transform: uppercase;
+    }
   </style>
 </head>
 <body class="bg-slate-50 text-slate-800">
@@ -297,13 +321,62 @@
       </div>
     </section>
 
+    <!-- INSTAGRAM -->
+    <section class="bg-white rounded-xl shadow-sm p-5" id="instagramSection" style="display:none;">
+      <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+        <div class="flex items-center gap-3">
+          <h2 class="text-lg font-semibold text-slate-800">Instagram</h2>
+          <a id="igHandle" href="#" target="_blank" rel="noopener" class="text-sm text-cyan-700 hover:text-cyan-900 font-medium"></a>
+        </div>
+        <p class="text-xs text-slate-400" id="igUpdatedAt"></p>
+      </div>
+
+      <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-5">
+        <div class="bg-slate-50 rounded-lg p-4">
+          <p class="text-xs uppercase text-slate-500 font-semibold">Seguidores</p>
+          <p class="text-xl font-bold text-slate-800 mt-1" id="igFollowers">0</p>
+        </div>
+        <div class="bg-slate-50 rounded-lg p-4">
+          <p class="text-xs uppercase text-slate-500 font-semibold">Total de posts</p>
+          <p class="text-xl font-bold text-slate-800 mt-1" id="igPosts">0</p>
+        </div>
+        <div class="bg-slate-50 rounded-lg p-4" title="Média de curtidas + comentários dos posts recentes">
+          <p class="text-xs uppercase text-slate-500 font-semibold">Eng. médio / post</p>
+          <p class="text-xl font-bold text-slate-800 mt-1" id="igAvgEng">0</p>
+          <p class="text-[10px] text-slate-400 mt-1">curtidas + comentários</p>
+        </div>
+        <div class="bg-slate-50 rounded-lg p-4" title="Alcance médio (contas únicas que viram o post)">
+          <p class="text-xs uppercase text-slate-500 font-semibold">Alcance médio / post</p>
+          <p class="text-xl font-bold text-slate-800 mt-1" id="igAvgReach">0</p>
+          <p class="text-[10px] text-slate-400 mt-1">contas únicas</p>
+        </div>
+        <div class="bg-slate-50 rounded-lg p-4" title="Total de saves nos posts recentes">
+          <p class="text-xs uppercase text-slate-500 font-semibold">Saves totais</p>
+          <p class="text-xl font-bold text-slate-800 mt-1" id="igSaves">0</p>
+          <p class="text-[10px] text-slate-400 mt-1">posts recentes</p>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <h3 class="text-sm font-semibold text-slate-700">Posts recentes</h3>
+        <div class="flex gap-2">
+          <button data-igsort="recent" class="ig-sort chip active">Mais recentes</button>
+          <button data-igsort="likes" class="ig-sort chip">+ Curtidas</button>
+          <button data-igsort="reach" class="ig-sort chip">+ Alcance</button>
+          <button data-igsort="saved" class="ig-sort chip">+ Saves</button>
+        </div>
+      </div>
+      <div id="igPostsGrid" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3"></div>
+    </section>
+
     <footer class="text-center text-xs text-slate-400 py-6">
-      Gerado por <code>build_dashboard.py</code> · dados do GA4 property 448015610
+      Gerado por <code>build_dashboard.py</code> · dados do GA4 + Instagram Graph API
     </footer>
 
   </main>
 
   <script id="raw-data" type="application/json">__DATA_JSON__</script>
+  <script id="ig-data" type="application/json">__INSTAGRAM_JSON__</script>
   <script>
   // ============================================================
   // CLASSIFICAÇÃO DE TIPO DE PÁGINA — edite aqui pra customizar.
@@ -912,9 +985,95 @@
     render();
   });
 
+  // ============================================================
+  // INSTAGRAM
+  // ============================================================
+  const INSTAGRAM_DATA = JSON.parse(document.getElementById("ig-data").textContent);
+  let igSort = "recent";
+
+  function renderInstagram() {
+    if (!INSTAGRAM_DATA || !INSTAGRAM_DATA.account) return;
+    const section = document.getElementById("instagramSection");
+    section.style.display = "";
+
+    const account = INSTAGRAM_DATA.account;
+    const posts = INSTAGRAM_DATA.posts || [];
+
+    const handle = document.getElementById("igHandle");
+    handle.textContent = "@" + account.username;
+    handle.href = "https://www.instagram.com/" + account.username + "/";
+
+    const fetchedAt = INSTAGRAM_DATA.fetched_at || "";
+    document.getElementById("igUpdatedAt").textContent = fetchedAt ? "Coletado " + fetchedAt.replace("T", " ") : "";
+
+    document.getElementById("igFollowers").textContent = fmt.format(account.followers_count || 0);
+    document.getElementById("igPosts").textContent = fmt.format(account.media_count || 0);
+
+    const sumLikes = posts.reduce((a, p) => a + (p.like_count || 0), 0);
+    const sumComments = posts.reduce((a, p) => a + (p.comments_count || 0), 0);
+    const avgEng = posts.length ? (sumLikes + sumComments) / posts.length : 0;
+    const sumReach = posts.reduce((a, p) => a + (p.reach || 0), 0);
+    const avgReach = posts.length ? sumReach / posts.length : 0;
+    const sumSaves = posts.reduce((a, p) => a + (p.saved || 0), 0);
+
+    document.getElementById("igAvgEng").textContent = fmt.format(Math.round(avgEng));
+    document.getElementById("igAvgReach").textContent = fmt.format(Math.round(avgReach));
+    document.getElementById("igSaves").textContent = fmt.format(sumSaves);
+
+    renderInstagramGrid(posts);
+  }
+
+  function renderInstagramGrid(posts) {
+    const sorted = [...posts];
+    if (igSort === "likes") sorted.sort((a, b) => (b.like_count || 0) - (a.like_count || 0));
+    else if (igSort === "reach") sorted.sort((a, b) => (b.reach || 0) - (a.reach || 0));
+    else if (igSort === "saved") sorted.sort((a, b) => (b.saved || 0) - (a.saved || 0));
+    else sorted.sort((a, b) => (b.timestamp || "").localeCompare(a.timestamp || ""));
+
+    const typeLabel = { IMAGE: "Foto", VIDEO: "Vídeo", CAROUSEL_ALBUM: "Carrossel" };
+    const grid = document.getElementById("igPostsGrid");
+    grid.innerHTML = sorted.map(post => {
+      const date = post.timestamp ? new Date(post.timestamp) : null;
+      const dateStr = date ? date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" }) : "";
+      const caption = (post.caption || "").trim();
+      const captionShort = caption.length > 110 ? caption.slice(0, 108) + "…" : caption;
+      const thumb = post.thumbnail_url || post.media_url || "";
+      const label = typeLabel[post.media_type] || "Post";
+      return `
+        <a href="${escapeHtml(post.permalink || "#")}" target="_blank" rel="noopener" class="ig-post">
+          <div class="thumb" ${thumb ? `style="background-image:url('${escapeHtml(thumb)}')"` : ""}>
+            <span class="badge">${label}</span>
+          </div>
+          <div class="p-3 flex flex-col gap-2">
+            <div class="flex justify-between items-center text-[11px] text-slate-500">
+              <span>${dateStr}</span>
+            </div>
+            <p class="text-xs text-slate-700 ig-clamp-2" title="${escapeHtml(caption)}">${escapeHtml(captionShort) || "<span class='text-slate-400'>(sem legenda)</span>"}</p>
+            <div class="grid grid-cols-2 gap-1 text-[11px] text-slate-600 pt-1 border-t border-slate-200">
+              <span title="Curtidas">❤ ${fmt.format(post.like_count || 0)}</span>
+              <span title="Comentários">💬 ${fmt.format(post.comments_count || 0)}</span>
+              <span title="Alcance (contas únicas)">👁 ${fmt.format(post.reach || 0)}</span>
+              <span title="Saves">🔖 ${fmt.format(post.saved || 0)}</span>
+            </div>
+          </div>
+        </a>
+      `;
+    }).join("") || `<p class="col-span-full text-center text-slate-400 py-6">Sem posts.</p>`;
+  }
+
+  document.querySelectorAll(".ig-sort").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".ig-sort").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      igSort = btn.dataset.igsort;
+      renderInstagramGrid(INSTAGRAM_DATA.posts || []);
+    });
+  });
+
   // ----- INIT -----
   populateFilters();
   render();
+  renderInstagram();
   </script>
 </body>
 </html>

@@ -40,6 +40,13 @@ jobs:
           mkdir -p credentials
           printf '%s' "$GA4_CREDENTIALS_JSON" > credentials/ga4-viva-rs.json
 
+      - name: Fetch Instagram data
+        env:
+          IG_BUSINESS_ID: ${{ secrets.IG_BUSINESS_ID }}
+          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+        run: python fetch_instagram.py
+        continue-on-error: true   # se token expirar/falhar, segue com só GA4
+
       - name: Build dashboard
         run: python build_dashboard.py
 
