@@ -409,7 +409,7 @@
     <div data-page-content="instagram" style="display:none;">
 
     <!-- INSTAGRAM -->
-    <section class="bg-white rounded-xl shadow-sm p-5" id="instagramSection" style="display:none;">
+    <section class="bg-white rounded-xl shadow-sm p-5" id="instagramSection">
       <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
         <div class="flex items-center gap-3">
           <h2 class="text-lg font-semibold text-slate-800">Instagram</h2>
@@ -1209,9 +1209,17 @@
   }
 
   function renderInstagram() {
-    if (!INSTAGRAM_DATA || !INSTAGRAM_DATA.account) return;
     const section = document.getElementById("instagramSection");
-    section.style.display = "";
+    if (!INSTAGRAM_DATA || !INSTAGRAM_DATA.account) {
+      section.innerHTML = `
+        <div class="text-center text-slate-500 py-10">
+          <p class="font-semibold mb-2 text-slate-700">Dados do Instagram não disponíveis</p>
+          <p class="text-sm">Verifique se os Secrets <code class="bg-slate-100 px-1 rounded">IG_BUSINESS_ID</code> e
+            <code class="bg-slate-100 px-1 rounded">IG_ACCESS_TOKEN</code> estão configurados no GitHub,
+            ou se o token expirou.</p>
+        </div>`;
+      return;
+    }
 
     const account = INSTAGRAM_DATA.account;
     const allPosts = INSTAGRAM_DATA.posts || [];
