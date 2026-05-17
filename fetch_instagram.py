@@ -22,8 +22,9 @@ from urllib.parse import urlencode
 from urllib.request import urlopen
 from urllib.error import HTTPError
 
-IG_BUSINESS_ID = os.environ.get("IG_BUSINESS_ID")
-IG_ACCESS_TOKEN = os.environ.get("IG_ACCESS_TOKEN")
+# .strip() pra remover quebras de linha/espaços que às vezes vêm coladas no Secret
+IG_BUSINESS_ID = (os.environ.get("IG_BUSINESS_ID") or "").strip()
+IG_ACCESS_TOKEN = (os.environ.get("IG_ACCESS_TOKEN") or "").strip()
 GRAPH_VERSION = "v23.0"
 BASE = f"https://graph.facebook.com/{GRAPH_VERSION}"
 OUTPUT_PATH = Path(__file__).parent / "instagram_data.json"
@@ -33,8 +34,14 @@ MEDIA_LIMIT = 50  # quantos posts recentes puxar
 
 def http_get(path: str, params: dict) -> dict:
     url = f"{BASE}/{path}?{urlencode(params)}"
-    with urlopen(url, timeout=30) as resp:
-        return json.loads(resp.read().decode("utf-8"))
+    try:
+        with urlopen(url, timeout=30) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+    except HTTPError as e:
+        body = e.read().decode("utf-8", errors="replace")
+        # Mostra o erro real da API sem expor o token (urlencode do path já omite credenciais sensíveis no log)
+        print(f"  ⚠ HTTPError {e.code} em /{path}: {body[:500]}")
+        raise
 
 
 def fetch_account() -> dict:
@@ -120,6 +127,8 @@ def update_history(account: dict, posts: list) -> int:
 
 
 def main() -> None:
+    # Debug: confirma que as env vars chegaram (sem expor valores)
+    print(f"Config: IG_BUSINESS_ID len={len(IG_BUSINESS_ID)}, IG_ACCESS_TOKEN len={len(IG_ACCESS_TOKEN)}")
     if not IG_BUSINESS_ID or not IG_ACCESS_TOKEN:
         raise RuntimeError(
             "IG_BUSINESS_ID e IG_ACCESS_TOKEN são obrigatórios. "
